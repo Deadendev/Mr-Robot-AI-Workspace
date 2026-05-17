@@ -16,6 +16,7 @@ import com.mrrobot.aiworkspace.data.HeartbeatManager
 import com.mrrobot.aiworkspace.data.MemoryCategory
 import com.mrrobot.aiworkspace.data.MemoryStore
 import com.mrrobot.aiworkspace.data.SettingsStore
+import com.mrrobot.aiworkspace.data.SkillStore
 import com.mrrobot.aiworkspace.data.StoredChatMessage
 import com.mrrobot.aiworkspace.data.deriveSessionTitle
 import kotlinx.coroutines.CancellationException
@@ -145,11 +146,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val agentConfigStore = AgentConfigStore(application.applicationContext)
     private val agentStore = AgentStore(application.applicationContext)
     private val chatHistoryStore = ChatHistoryStore(application.applicationContext)
+    private val skillStore = SkillStore(application.applicationContext)
 
     private val repository = ChatRepository(
         agentConfigStore = agentConfigStore,
         memoryStore = memoryStore,
-        agentStore = agentStore
+        agentStore = agentStore,
+        skillStore = skillStore
     )
 
     private val heartbeatManager = HeartbeatManager(

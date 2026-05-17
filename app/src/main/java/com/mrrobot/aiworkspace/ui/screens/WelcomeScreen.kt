@@ -81,13 +81,13 @@ fun WelcomeScreen(nav: NavController) {
                     Spacer(Modifier.height(10.dp))
 
                     OutlinedButton(
-                        onClick = { nav.navigate(Route.Workflow.path) },
+                        onClick = { nav.navigate(Route.Skills.path) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp),
                         shape = MaterialTheme.shapes.large
                     ) {
-                        Text("Build Workflow")
+                        Text("Manage Skills")
                     }
                 }
 
