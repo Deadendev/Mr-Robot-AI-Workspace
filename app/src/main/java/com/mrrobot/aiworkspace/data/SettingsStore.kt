@@ -47,7 +47,7 @@ data class AppSettings(
     val groqModel: String = "llama-3.3-70b-versatile",
     val mistralModel: String = "mistral-large-latest",
     val deepSeekModel: String = "deepseek-chat",
-    val xAiModel: String = "grok-2-latest",
+    val xAiModel: String = "grok-4-1-fast-non-reasoning-latest",
     val cohereModel: String = "command-a-03-2025",
     val perplexityModel: String = "sonar-pro",
     val togetherModel: String = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -439,7 +439,12 @@ class SettingsStore(private val context: Context) {
         provider: ApiProvider,
         value: String?
     ): String {
-        return AiModels.byIdOrNull(value.orEmpty())
+        // First try the value as-is, then fall back to the upgrade map
+        // (so a user whose stored xAI model is "grok-2-latest" silently
+        // migrates to "grok-4-1-fast-non-reasoning-latest" instead of
+        // hitting "model is deprecated" / "no endpoints found").
+        val candidate = AiModels.resolveOrUpgrade(value)
+        return AiModels.byIdOrNull(candidate.orEmpty())
             ?.takeIf { it.apiProvider == provider }
             ?.id
             ?: AiModels.defaultForProvider(provider).id

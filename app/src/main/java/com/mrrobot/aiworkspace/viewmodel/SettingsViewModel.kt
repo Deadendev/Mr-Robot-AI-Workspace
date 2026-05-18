@@ -44,7 +44,7 @@ data class SettingsUiState(
     val groqModel: String = "llama-3.3-70b-versatile",
     val mistralModel: String = "mistral-large-latest",
     val deepSeekModel: String = "deepseek-chat",
-    val xAiModel: String = "grok-2-latest",
+    val xAiModel: String = "grok-4-1-fast-non-reasoning-latest",
     val cohereModel: String = "command-a-03-2025",
     val perplexityModel: String = "sonar-pro",
     val togetherModel: String = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
