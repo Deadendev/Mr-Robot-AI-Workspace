@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.coroutines.coroutineContext
 
 /**
  * Manages the Alpine Linux sandbox lifecycle: download, extract, configure,
@@ -132,7 +133,7 @@ class SandboxManager private constructor(private val context: Context) {
         val executor = createProotExecutor()
         var updated = false
         for (mirror in ALPINE_MIRRORS) {
-            ensureActive()
+            coroutineContext.ensureActive()
             RootfsDownloader.writeRepositories(rootfsDir, mirror)
             val result = executor.execute("apk update", timeoutSeconds = 60)
             if (result["success"] as? Boolean == true) {
