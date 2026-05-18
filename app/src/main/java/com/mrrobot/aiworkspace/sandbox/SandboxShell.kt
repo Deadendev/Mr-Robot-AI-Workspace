@@ -25,6 +25,17 @@ private const val US = "\u001f"
 private const val PID_PROBE_PREFIX = "${RS}KAIBASHPID$US"
 
 /**
+ * Shells we'll try to launch the persistent session with, in order.
+ * Fresh Alpine rootfs only ships busybox `sh` (ash); `bash` is only
+ * present after `apk add bash`. Falling back keeps the terminal usable
+ * before "Install basic packages" runs.
+ */
+private val SHELL_CANDIDATES = listOf(
+    "/bin/bash --noprofile --norc",
+    "/bin/sh"
+)
+
+/**
  * Persistent interactive bash shell running inside the proot sandbox.
  * Supports multiple sequential commands sharing state (cd, env, etc).
  * Ported from Kai (Apache-2.0).
@@ -130,8 +141,13 @@ class SandboxShell(private val executor: ProotExecutor, private val tmpPath: Str
 
     private fun ensureShell() {
         if (handle != null) return
+
+        // Pick the first shell that actually exists in the rootfs.
+        // Avoids the "bash: not found" hang on fresh Alpine installs.
+        val shellCmd = pickAvailableShell()
+
         val h = executor.executeStreaming(
-            command = "exec bash --noprofile --norc",
+            command = "exec $shellCmd",
             onStdout = { line -> dispatchStdout(line) },
             onStderr = { line -> dispatchStderr(line) }
         )
@@ -144,6 +160,21 @@ class SandboxShell(private val executor: ProotExecutor, private val tmpPath: Str
             )
             handle = null; bashPid = null
         }
+    }
+
+    /**
+     * Walks [SHELL_CANDIDATES] and returns the command for the first whose
+     * executable exists inside the sandbox. Falls back to `/bin/sh` (always
+     * present in busybox) if none can be probed.
+     */
+    private fun pickAvailableShell(): String {
+        for (candidate in SHELL_CANDIDATES) {
+            val exe = candidate.substringBefore(' ')
+            val probe = executor.execute("test -x $exe && echo OK", timeoutSeconds = 5)
+            val stdout = probe["stdout"] as? String ?: ""
+            if (stdout.trim() == "OK") return candidate
+        }
+        return "/bin/sh"
     }
 
     private fun dispatchStdout(line: String) {
