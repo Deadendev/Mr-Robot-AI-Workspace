@@ -11,8 +11,8 @@ android {
         applicationId = "com.mrrobot.aiworkspace"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "2.5"
+        versionCode = 26
+        versionName = "2.6"
     }
 
     buildFeatures {
@@ -30,6 +30,13 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    packaging {
+        // Required: proot binaries must be extracted to disk so they can be exec'd.
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
