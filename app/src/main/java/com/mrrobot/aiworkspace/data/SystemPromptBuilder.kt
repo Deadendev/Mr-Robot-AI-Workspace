@@ -46,7 +46,8 @@ object SystemPromptBuilder {
         soul: SoulConfig,
         memories: List<MemoryEntry>,
         activeAgent: Agent? = null,
-        activeSkills: List<Skill> = emptyList()
+        activeSkills: List<Skill> = emptyList(),
+        sandboxAvailable: Boolean = false
     ): String = buildString {
         if (activeAgent != null) {
             append("You are ${activeAgent.name}.\n")
@@ -80,6 +81,13 @@ object SystemPromptBuilder {
         // Memory tools — taught to every model so natural-language
         // "remember my name is Alex" gets persisted automatically.
         append(MEMORY_TOOL_INSTRUCTIONS)
+
+        // Sandbox tools — only advertised when the on-device Linux sandbox
+        // is actually ready, so the model doesn't hallucinate file ops when
+        // the user hasn't installed it yet.
+        if (sandboxAvailable) {
+            append(SANDBOX_TOOL_INSTRUCTIONS)
+        }
 
         val byCategory = memories.groupBy { it.category }
 
@@ -235,6 +243,72 @@ and do NOT explain them. Just emit them after your normal answer.
 
 If the user explicitly asks "what do you remember about me?", read
 the memories listed below and answer naturally.
+
+""".trimIndent()
+
+    private val SANDBOX_TOOL_INSTRUCTIONS = """
+
+
+## Linux Sandbox Tools
+
+You have access to a real Alpine Linux sandbox running on the user's
+device. You can run shell commands and read/write/delete files in it.
+Use these whenever the user asks you to inspect their environment,
+generate code into a file, run a script, install a package, etc.
+
+Emit directives on their own line(s). The app intercepts them, runs
+them, and feeds the results back to you in a follow-up turn — only
+then should you compose your final answer to the user.
+
+### Run a shell command
+
+[SHELL <command>]
+
+Examples:
+  [SHELL ls -la /root]
+  [SHELL python3 -c 'print(2 ** 16)']
+  [SHELL apk info | head -20]
+  [SHELL cd /root && ls && pwd]
+
+Each [SHELL] runs in a fresh process, so combine multi-step work with
+&& or ; on a single line.
+
+### Create or overwrite a file
+
+[FILE_WRITE <absolute-path>]
+<file content, possibly multi-line>
+[/FILE_WRITE]
+
+The opening tag must be on its own line, and the closing tag must be
+on its own line. The body in between is taken literally.
+
+Example:
+  [FILE_WRITE /root/hello.py]
+  print("hello, world")
+  [/FILE_WRITE]
+
+### Read a file
+
+[FILE_READ <path>]
+
+The first ~8 KB of the file are returned to you.
+
+### Delete a file or directory
+
+[FILE_DELETE <path>]
+
+Removes the path recursively. Never delete /, /root, /etc, or system
+paths unless the user explicitly asks.
+
+### Rules
+
+  - You may emit any combination of [SEARCH], [SHELL], [FILE_*]
+    directives in one reply.
+  - Up to 5 tool rounds per chat turn.
+  - Stop emitting directives once you have what you need, then write
+    your final natural-language answer.
+  - Do NOT fabricate output. If you didn't run a command, don't pretend.
+  - Directives are silent — never describe them to the user as code.
 
 """.trimIndent()
 }

@@ -15,8 +15,10 @@ import com.mrrobot.aiworkspace.data.ChatSession
 import com.mrrobot.aiworkspace.data.HeartbeatManager
 import com.mrrobot.aiworkspace.data.MemoryCategory
 import com.mrrobot.aiworkspace.data.MemoryStore
+import com.mrrobot.aiworkspace.data.SandboxToolHost
 import com.mrrobot.aiworkspace.data.SettingsStore
 import com.mrrobot.aiworkspace.data.SkillStore
+import com.mrrobot.aiworkspace.sandbox.SandboxManager
 import com.mrrobot.aiworkspace.data.StoredChatMessage
 import com.mrrobot.aiworkspace.data.deriveSessionTitle
 import kotlinx.coroutines.CancellationException
@@ -148,11 +150,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val chatHistoryStore = ChatHistoryStore(application.applicationContext)
     private val skillStore = SkillStore(application.applicationContext)
 
+    private val sandboxManager = SandboxManager.getInstance(application.applicationContext)
+    private val sandboxToolHost = SandboxToolHost(sandboxManager)
+
     private val repository = ChatRepository(
         agentConfigStore = agentConfigStore,
         memoryStore = memoryStore,
         agentStore = agentStore,
-        skillStore = skillStore
+        skillStore = skillStore,
+        sandboxToolHost = sandboxToolHost
     )
 
     private val heartbeatManager = HeartbeatManager(
@@ -680,10 +686,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         // Surface the auto-save / search inline so the user
                         // sees the AI actually did something.
-                        if (reply.didMutateMemory || reply.didSearch) {
+                        if (reply.didMutateMemory || reply.didSearch || reply.didUseSandbox) {
                             val parts = buildList {
                                 if (reply.searchedQueries.isNotEmpty()) {
                                     add("🔍 Searched: " + reply.searchedQueries.joinToString(", "))
+                                }
+                                if (reply.sandboxOps.isNotEmpty()) {
+                                    add("🖥️ Sandbox: " + reply.sandboxOps.joinToString(", "))
                                 }
                                 if (reply.savedMemoryKeys.isNotEmpty()) {
                                     add("💾 Saved: " + reply.savedMemoryKeys.joinToString(", "))
