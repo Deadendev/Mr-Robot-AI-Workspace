@@ -75,7 +75,7 @@ object AttachmentExtractor {
             }
         } catch (t: Throwable) {
             base.copy(
-                mimeType = mime.ifBlank { base.mimeType },
+                mimeType = if (mime.isBlank()) base.mimeType else mime,
                 extractionStatus = "Failed: ${t.message?.take(200) ?: t.javaClass.simpleName}"
             )
         }
@@ -101,7 +101,7 @@ object AttachmentExtractor {
             "Read ${text.length} chars"
         }
         return base.copy(
-            mimeType = mime.ifBlank { base.mimeType },
+            mimeType = if (mime.isBlank()) base.mimeType else mime,
             extractedText = text,
             readableText = text,
             extractionStatus = status
@@ -439,8 +439,8 @@ object AttachmentExtractor {
             "Extracted ${text.length} chars from document"
         }
         return base.copy(
-            mimeType = mime.ifBlank { base.mimeType },
-            extractedText = text.ifBlank { null },
+            mimeType = if (mime.isBlank()) base.mimeType else mime,
+            extractedText = text.takeIf { it.isNotBlank() },
             readableText = text,
             extractionStatus = status
         )
@@ -464,7 +464,7 @@ object AttachmentExtractor {
             append("First ").append(head.size).append(" bytes (hex):\n").append(hex)
         }
         return base.copy(
-            mimeType = mime.ifBlank { base.mimeType },
+            mimeType = if (mime.isBlank()) base.mimeType else mime,
             description = description,
             readableText = description,
             extractionStatus = "Binary; sent hex preview only"
