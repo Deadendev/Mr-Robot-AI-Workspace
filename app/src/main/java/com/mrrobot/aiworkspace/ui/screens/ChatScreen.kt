@@ -326,6 +326,7 @@ fun ChatScreen(
                         .firstOrNull { it.id == state.activeSessionId }
                         ?.title,
                     onOpenHistory = { scope.launch { drawerState.open() } },
+                    onOpenSandbox = { navController?.navigate(Route.Sandbox.path) },
                     onNewChat = { viewModel.newChat() }
                 )
 
@@ -431,6 +432,7 @@ private fun ChatTopBar(
     isReady: Boolean,
     activeSessionTitle: String?,
     onOpenHistory: () -> Unit,
+    onOpenSandbox: () -> Unit,
     onNewChat: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -485,6 +487,13 @@ private fun ChatTopBar(
                         )
                     }
                 }
+
+                CircularIconButton(
+                    iconRes = R.drawable.ic_lucide_terminal,
+                    contentDescription = "Linux sandbox",
+                    onClick = onOpenSandbox,
+                    tint = scheme.tertiary
+                )
 
                 CircularIconButton(
                     iconRes = R.drawable.ic_lucide_edit,

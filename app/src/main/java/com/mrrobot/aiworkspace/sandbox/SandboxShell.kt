@@ -130,8 +130,13 @@ class SandboxShell(private val executor: ProotExecutor, private val tmpPath: Str
 
     private fun ensureShell() {
         if (handle != null) return
+
+        // Pick the first shell that actually exists in the rootfs.
+        // Fresh Alpine only ships busybox sh; bash arrives after "Install basic packages".
+        val shellCmd = pickAvailableShell()
+
         val h = executor.executeStreaming(
-            command = "exec bash --noprofile --norc",
+            command = "exec $shellCmd",
             onStdout = { line -> dispatchStdout(line) },
             onStderr = { line -> dispatchStderr(line) }
         )
@@ -144,6 +149,21 @@ class SandboxShell(private val executor: ProotExecutor, private val tmpPath: Str
             )
             handle = null; bashPid = null
         }
+    }
+
+    /**
+     * Probe for the first available shell executable inside the sandbox.
+     * Falls back to /bin/sh (always present via busybox).
+     */
+    private fun pickAvailableShell(): String {
+        val candidates = listOf("/bin/bash --noprofile --norc", "/bin/sh")
+        for (candidate in candidates) {
+            val exe = candidate.substringBefore(' ')
+            val probe = executor.execute("test -x $exe && echo OK", timeoutSeconds = 5)
+            val stdout = probe["stdout"] as? String ?: ""
+            if (stdout.trim() == "OK") return candidate
+        }
+        return "/bin/sh"
     }
 
     private fun dispatchStdout(line: String) {
