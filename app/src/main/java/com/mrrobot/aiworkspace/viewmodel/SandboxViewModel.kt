@@ -42,6 +42,11 @@ data class SandboxUiState(
     val currentPath: String = "/root",
     val files: List<SandboxFileEntry> = emptyList(),
     val isLoadingFiles: Boolean = false,
+    val openedFileContent: String? = null,
+    val openedFileName: String? = null,
+    val openedFilePath: String? = null,
+    val isLoadingFileContent: Boolean = false,
+    val fileOperationError: String? = null,
 
     // Packages tab
     val packages: List<PackageEntry> = emptyList(),
@@ -124,6 +129,169 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         if (current == "/") return
         val parent = File(current).parent ?: "/"
         navigateTo(parent)
+    }
+
+    fun createFile(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        val currentPath = _uiState.value.currentPath
+        val fullPath = if (currentPath == "/") "/$trimmed" else "$currentPath/$trimmed"
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val executor = manager.createProotExecutor()
+            val result = executor.execute("touch '$fullPath'", timeoutSeconds = 10)
+            val ok = result["success"] as? Boolean ?: false
+            if (!ok) {
+                val err = (result["stderr"] as? String).orEmpty().ifBlank {
+                    (result["error"] as? String).orEmpty()
+                }
+                _uiState.value = _uiState.value.copy(
+                    fileOperationError = "Failed to create file: ${err.take(100)}"
+                )
+            }
+            loadFiles()
+        }
+    }
+
+    fun createFolder(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        val currentPath = _uiState.value.currentPath
+        val fullPath = if (currentPath == "/") "/$trimmed" else "$currentPath/$trimmed"
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val executor = manager.createProotExecutor()
+            val result = executor.execute("mkdir -p '$fullPath'", timeoutSeconds = 10)
+            val ok = result["success"] as? Boolean ?: false
+            if (!ok) {
+                val err = (result["stderr"] as? String).orEmpty().ifBlank {
+                    (result["error"] as? String).orEmpty()
+                }
+                _uiState.value = _uiState.value.copy(
+                    fileOperationError = "Failed to create folder: ${err.take(100)}"
+                )
+            }
+            loadFiles()
+        }
+    }
+
+    fun openFile(file: SandboxFileEntry) {
+        if (file.isDirectory) {
+            navigateTo(file.path)
+            return
+        }
+        _uiState.value = _uiState.value.copy(
+            isLoadingFileContent = true,
+            openedFileName = file.name,
+            openedFilePath = file.path,
+            openedFileContent = null
+        )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val executor = manager.createProotExecutor()
+            val result = executor.execute("head -c 32000 '${file.path}'", timeoutSeconds = 15)
+            val ok = result["success"] as? Boolean ?: false
+            val content = if (ok) {
+                (result["stdout"] as? String).orEmpty()
+            } else {
+                "[Could not read file: ${(result["stderr"] as? String).orEmpty().take(200)}]"
+            }
+            _uiState.value = _uiState.value.copy(
+                openedFileContent = content,
+                isLoadingFileContent = false
+            )
+        }
+    }
+
+    fun closeFileViewer() {
+        _uiState.value = _uiState.value.copy(
+            openedFileContent = null,
+            openedFileName = null,
+            openedFilePath = null
+        )
+    }
+
+    fun saveFileContent(content: String) {
+        val path = _uiState.value.openedFilePath ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            // Stage content via host tmp dir (same approach as SandboxToolHost)
+            val tmpHost = File(manager.tmpPath).apply { mkdirs() }
+            val nonce = System.currentTimeMillis().toString(36)
+            val staged = File(tmpHost, ".mr_edit_$nonce")
+
+            runCatching { staged.writeText(content) }.onFailure {
+                _uiState.value = _uiState.value.copy(
+                    fileOperationError = "Failed to stage write: ${it.message}"
+                )
+                return@launch
+            }
+
+            val executor = manager.createProotExecutor()
+            val result = executor.execute(
+                "cp /tmp/.mr_edit_$nonce '$path' && rm -f /tmp/.mr_edit_$nonce",
+                timeoutSeconds = 15
+            )
+            runCatching { staged.delete() }
+
+            val ok = result["success"] as? Boolean ?: false
+            if (!ok) {
+                val err = (result["stderr"] as? String).orEmpty().ifBlank {
+                    (result["error"] as? String).orEmpty()
+                }
+                _uiState.value = _uiState.value.copy(
+                    fileOperationError = "Failed to save: ${err.take(100)}"
+                )
+            } else {
+                // Refresh content
+                _uiState.value = _uiState.value.copy(openedFileContent = content)
+            }
+            loadFiles()
+        }
+    }
+
+    fun renameFile(file: SandboxFileEntry, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank() || trimmed == file.name) return
+
+        val parentDir = File(file.path).parent ?: _uiState.value.currentPath
+        val newPath = if (parentDir == "/") "/$trimmed" else "$parentDir/$trimmed"
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val executor = manager.createProotExecutor()
+            val result = executor.execute("mv '${file.path}' '$newPath'", timeoutSeconds = 10)
+            val ok = result["success"] as? Boolean ?: false
+            if (!ok) {
+                val err = (result["stderr"] as? String).orEmpty().ifBlank {
+                    (result["error"] as? String).orEmpty()
+                }
+                _uiState.value = _uiState.value.copy(
+                    fileOperationError = "Rename failed: ${err.take(100)}"
+                )
+            }
+            loadFiles()
+        }
+    }
+
+    fun deleteFile(file: SandboxFileEntry) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val executor = manager.createProotExecutor()
+            val result = executor.execute("rm -rf '${file.path}'", timeoutSeconds = 15)
+            val ok = result["success"] as? Boolean ?: false
+            if (!ok) {
+                val err = (result["stderr"] as? String).orEmpty().ifBlank {
+                    (result["error"] as? String).orEmpty()
+                }
+                _uiState.value = _uiState.value.copy(
+                    fileOperationError = "Delete failed: ${err.take(100)}"
+                )
+            }
+            loadFiles()
+        }
+    }
+
+    fun clearFileError() {
+        _uiState.value = _uiState.value.copy(fileOperationError = null)
     }
 
     private fun loadFiles() {

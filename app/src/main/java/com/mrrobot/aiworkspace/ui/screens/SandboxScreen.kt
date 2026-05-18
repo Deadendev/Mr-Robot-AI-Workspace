@@ -425,8 +425,111 @@ private fun FilesTab(viewModel: SandboxViewModel) {
     val state by viewModel.uiState.collectAsState()
     val scheme = MaterialTheme.colorScheme
 
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf<SandboxFileEntry?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<SandboxFileEntry?>(null) }
+    var showContextMenu by remember { mutableStateOf<SandboxFileEntry?>(null) }
+
+    // File content viewer overlay
+    if (state.openedFileContent != null || state.isLoadingFileContent) {
+        FileContentViewer(
+            fileName = state.openedFileName.orEmpty(),
+            filePath = state.openedFilePath.orEmpty(),
+            content = state.openedFileContent.orEmpty(),
+            isLoading = state.isLoadingFileContent,
+            onClose = { viewModel.closeFileViewer() },
+            onSave = { newContent -> viewModel.saveFileContent(newContent) }
+        )
+        return
+    }
+
+    // Create file/folder dialog
+    if (showCreateDialog) {
+        CreateFileDialog(
+            onDismiss = { showCreateDialog = false },
+            onCreateFile = { name ->
+                viewModel.createFile(name)
+                showCreateDialog = false
+            },
+            onCreateFolder = { name ->
+                viewModel.createFolder(name)
+                showCreateDialog = false
+            }
+        )
+    }
+
+    // Rename dialog
+    showRenameDialog?.let { file ->
+        RenameDialog(
+            currentName = file.name,
+            onDismiss = { showRenameDialog = null },
+            onRename = { newName ->
+                viewModel.renameFile(file, newName)
+                showRenameDialog = null
+            }
+        )
+    }
+
+    // Delete confirmation dialog
+    showDeleteDialog?.let { file ->
+        DeleteConfirmDialog(
+            fileName = file.name,
+            isDirectory = file.isDirectory,
+            onDismiss = { showDeleteDialog = null },
+            onConfirm = {
+                viewModel.deleteFile(file)
+                showDeleteDialog = null
+            }
+        )
+    }
+
+    // Context menu (bottom sheet style inline)
+    showContextMenu?.let { file ->
+        FileContextMenu(
+            file = file,
+            onDismiss = { showContextMenu = null },
+            onOpen = {
+                viewModel.openFile(file)
+                showContextMenu = null
+            },
+            onRename = {
+                showContextMenu = null
+                showRenameDialog = file
+            },
+            onDelete = {
+                showContextMenu = null
+                showDeleteDialog = file
+            }
+        )
+    }
+
+    // Error snackbar-style
+    state.fileOperationError?.let { error ->
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            color = scheme.errorContainer
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = error,
+                    color = scheme.onErrorContainer,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { viewModel.clearFileError() }) {
+                    Text("OK", fontSize = 12.sp)
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        // Breadcrumb
+        // Breadcrumb + actions row
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(10.dp),
@@ -454,8 +557,22 @@ private fun FilesTab(viewModel: SandboxViewModel) {
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+
+                // Add file button
+                IconButton(
+                    onClick = { showCreateDialog = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_lucide_plus),
+                        contentDescription = "New file",
+                        tint = scheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
@@ -473,11 +590,17 @@ private fun FilesTab(viewModel: SandboxViewModel) {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Empty directory",
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 14.sp
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Empty directory",
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(onClick = { showCreateDialog = true }) {
+                        Text("Create a file")
+                    }
+                }
             }
         } else {
             LazyColumn(
@@ -493,7 +616,9 @@ private fun FilesTab(viewModel: SandboxViewModel) {
                         file = file,
                         onClick = {
                             if (file.isDirectory) viewModel.navigateTo(file.path)
-                        }
+                            else viewModel.openFile(file)
+                        },
+                        onLongClick = { showContextMenu = file }
                     )
                 }
             }
@@ -502,13 +627,17 @@ private fun FilesTab(viewModel: SandboxViewModel) {
 }
 
 @Composable
-private fun FileRow(file: SandboxFileEntry, onClick: () -> Unit) {
+private fun FileRow(
+    file: SandboxFileEntry,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
     val scheme = MaterialTheme.colorScheme
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = file.isDirectory) { onClick() },
+            .clickable { onClick() },
         shape = RoundedCornerShape(10.dp),
         color = scheme.surfaceVariant.copy(alpha = 0.4f)
     ) {
@@ -547,17 +676,370 @@ private fun FileRow(file: SandboxFileEntry, onClick: () -> Unit) {
                 }
             }
 
-            if (file.isDirectory) {
+            // Context menu button (three dots)
+            IconButton(
+                onClick = onLongClick,
+                modifier = Modifier.size(28.dp)
+            ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_lucide_arrow_left),
-                    contentDescription = null,
+                    painter = painterResource(id = R.drawable.ic_lucide_more_vertical),
+                    contentDescription = "Options",
                     tint = scheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                    // Rotated 180 degrees to point right — simple workaround
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
     }
+}
+
+/* ── File Content Viewer / Editor ── */
+
+@Composable
+private fun FileContentViewer(
+    fileName: String,
+    filePath: String,
+    content: String,
+    isLoading: Boolean,
+    onClose: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    var editedContent by remember(content) { mutableStateOf(content) }
+    var isEditing by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Header
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = scheme.surfaceVariant.copy(alpha = 0.6f),
+            shape = RoundedCornerShape(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_lucide_arrow_left),
+                        contentDescription = "Back",
+                        tint = scheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = fileName,
+                        color = scheme.onSurface,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = filePath,
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (!isLoading) {
+                    if (isEditing) {
+                        TextButton(onClick = {
+                            onSave(editedContent)
+                            isEditing = false
+                        }) {
+                            Text("Save", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    } else {
+                        TextButton(onClick = { isEditing = true }) {
+                            Text("Edit", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        if (isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            if (isEditing) {
+                OutlinedTextField(
+                    value = editedContent,
+                    onValueChange = { editedContent = it },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 8.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        color = scheme.onSurface
+                    )
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = TerminalDarkBg
+                ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp)
+                    ) {
+                        item {
+                            Text(
+                                text = content.ifEmpty { "(empty file)" },
+                                color = Color(0xFFD1D5DB),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* ── Create File/Folder Dialog ── */
+
+@Composable
+private fun CreateFileDialog(
+    onDismiss: () -> Unit,
+    onCreateFile: (String) -> Unit,
+    onCreateFolder: (String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var isFolder by remember { mutableStateOf(false) }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isFolder) "New Folder" else "New File") },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { isFolder = false },
+                        shape = RoundedCornerShape(50),
+                        color = if (!isFolder) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        else Color.Transparent
+                    ) {
+                        Text(
+                            "File",
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            color = if (!isFolder) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (!isFolder) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { isFolder = true },
+                        shape = RoundedCornerShape(50),
+                        color = if (isFolder) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        else Color.Transparent
+                    ) {
+                        Text(
+                            "Folder",
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            color = if (isFolder) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (isFolder) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = { Text(if (isFolder) "folder name" else "file name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (isFolder) onCreateFolder(name) else onCreateFile(name)
+                },
+                enabled = name.isNotBlank()
+            ) {
+                Text("Create")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/* ── Rename Dialog ── */
+
+@Composable
+private fun RenameDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit
+) {
+    var newName by remember { mutableStateOf(currentName) }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename") },
+        text = {
+            OutlinedTextField(
+                value = newName,
+                onValueChange = { newName = it },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                label = { Text("New name") }
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onRename(newName) },
+                enabled = newName.isNotBlank() && newName != currentName
+            ) {
+                Text("Rename")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/* ── Delete Confirmation Dialog ── */
+
+@Composable
+private fun DeleteConfirmDialog(
+    fileName: String,
+    isDirectory: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete ${if (isDirectory) "folder" else "file"}?") },
+        text = {
+            Text(
+                "\"$fileName\" will be permanently deleted." +
+                    if (isDirectory) " This includes all contents inside it." else ""
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete", color = scheme.error, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/* ── File Context Menu (inline card) ── */
+
+@Composable
+private fun FileContextMenu(
+    file: SandboxFileEntry,
+    onDismiss: () -> Unit,
+    onOpen: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+
+    // Simple overlay dialog
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = file.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!file.isDirectory) {
+                    TextButton(
+                        onClick = onOpen,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_lucide_file),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text("Open with app", modifier = Modifier.weight(1f))
+                    }
+                }
+                TextButton(
+                    onClick = onRename,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_lucide_edit),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text("Rename", modifier = Modifier.weight(1f))
+                }
+                TextButton(
+                    onClick = onDelete,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = scheme.error)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_lucide_trash),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text("Delete", modifier = Modifier.weight(1f))
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 private fun formatFileSize(bytes: Long): String = when {
