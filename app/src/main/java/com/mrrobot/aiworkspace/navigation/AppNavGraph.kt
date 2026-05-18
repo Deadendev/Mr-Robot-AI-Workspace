@@ -20,15 +20,14 @@ import androidx.navigation.compose.rememberNavController
 import com.mrrobot.aiworkspace.R
 import com.mrrobot.aiworkspace.ui.screens.AgentsScreen
 import com.mrrobot.aiworkspace.ui.screens.ChatScreen
-import com.mrrobot.aiworkspace.ui.screens.FileManagerScreen
 import com.mrrobot.aiworkspace.ui.screens.MarketplaceScreen
 import com.mrrobot.aiworkspace.ui.screens.MemoriesScreen
 import com.mrrobot.aiworkspace.ui.screens.MoreScreen
 import com.mrrobot.aiworkspace.ui.screens.ProfileScreen
+import com.mrrobot.aiworkspace.ui.screens.SandboxScreen
 import com.mrrobot.aiworkspace.ui.screens.SettingsScreen
 import com.mrrobot.aiworkspace.ui.screens.SkillsScreen
 import com.mrrobot.aiworkspace.ui.screens.SoulHeartbeatScreen
-import com.mrrobot.aiworkspace.ui.screens.TerminalScreen
 import com.mrrobot.aiworkspace.ui.screens.WelcomeScreen
 
 sealed class Route(
@@ -66,16 +65,10 @@ sealed class Route(
         iconRes = R.drawable.ic_lucide_menu
     )
 
-    object Terminal : Route(
-        path = "terminal",
-        label = "Terminal",
+    object Sandbox : Route(
+        path = "sandbox",
+        label = "Sandbox",
         iconRes = R.drawable.ic_lucide_terminal
-    )
-
-    object Files : Route(
-        path = "files",
-        label = "Files",
-        iconRes = R.drawable.ic_lucide_folder
     )
 
     object Market : Route(
@@ -195,12 +188,8 @@ fun AppNavGraph() {
                 MoreScreen(navController)
             }
 
-            composable(Route.Terminal.path) {
-                TerminalScreen()
-            }
-
-            composable(Route.Files.path) {
-                FileManagerScreen()
+            composable(Route.Sandbox.path) {
+                SandboxScreen()
             }
 
             composable(Route.Market.path) {
@@ -233,8 +222,7 @@ private fun isBottomItemSelected(
     if (currentRoute == route.path) return true
 
     val moreRoutes = setOf(
-        Route.Terminal.path,
-        Route.Files.path,
+        Route.Sandbox.path,
         Route.Market.path,
         Route.Settings.path,
         Route.Profile.path,

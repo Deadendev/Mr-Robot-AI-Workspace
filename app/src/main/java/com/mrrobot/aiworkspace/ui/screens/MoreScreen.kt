@@ -35,7 +35,7 @@ fun MoreScreen(navController: NavController) {
         ) {
             item {
                 Title("More")
-                Subtitle("Access workspace tools, files, marketplace, settings, and profile.")
+                Subtitle("Access workspace tools, sandbox, marketplace, settings, and profile.")
 
                 Spacer(Modifier.height(14.dp))
 
@@ -56,19 +56,11 @@ fun MoreScreen(navController: NavController) {
                 )
 
                 MoreCard(
-                    iconRes = Route.Terminal.iconRes,
-                    title = "Live Terminal",
-                    subtitle = "View simulated build logs and command output.",
-                    button = "Open Terminal",
-                    onClick = { navController.navigate(Route.Terminal.path) }
-                )
-
-                MoreCard(
-                    iconRes = Route.Files.iconRes,
-                    title = "File Manager",
-                    subtitle = "Browse project files and Stitch design references.",
-                    button = "Open Files",
-                    onClick = { navController.navigate(Route.Files.path) }
+                    iconRes = Route.Sandbox.iconRes,
+                    title = "Linux Sandbox",
+                    subtitle = "Real Alpine Linux terminal, file browser, and package manager — all running locally on your device.",
+                    button = "Open Sandbox",
+                    onClick = { navController.navigate(Route.Sandbox.path) }
                 )
 
                 MoreCard(
