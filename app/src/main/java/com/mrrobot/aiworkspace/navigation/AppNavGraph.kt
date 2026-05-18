@@ -26,10 +26,10 @@ import com.mrrobot.aiworkspace.ui.screens.MemoriesScreen
 import com.mrrobot.aiworkspace.ui.screens.MoreScreen
 import com.mrrobot.aiworkspace.ui.screens.ProfileScreen
 import com.mrrobot.aiworkspace.ui.screens.SettingsScreen
+import com.mrrobot.aiworkspace.ui.screens.SkillsScreen
 import com.mrrobot.aiworkspace.ui.screens.SoulHeartbeatScreen
 import com.mrrobot.aiworkspace.ui.screens.TerminalScreen
 import com.mrrobot.aiworkspace.ui.screens.WelcomeScreen
-import com.mrrobot.aiworkspace.ui.screens.WorkflowScreen
 
 sealed class Route(
     val path: String,
@@ -54,10 +54,10 @@ sealed class Route(
         iconRes = R.drawable.ic_lucide_bot
     )
 
-    object Workflow : Route(
-        path = "workflow",
-        label = "Flow",
-        iconRes = R.drawable.ic_lucide_workflow
+    object Skills : Route(
+        path = "skills",
+        label = "Skills",
+        iconRes = R.drawable.ic_lucide_wand
     )
 
     object More : Route(
@@ -117,7 +117,7 @@ fun AppNavGraph() {
         Route.Welcome,
         Route.Chat,
         Route.Agents,
-        Route.Workflow,
+        Route.Skills,
         Route.More
     )
 
@@ -187,8 +187,8 @@ fun AppNavGraph() {
                 AgentsScreen()
             }
 
-            composable(Route.Workflow.path) {
-                WorkflowScreen()
+            composable(Route.Skills.path) {
+                SkillsScreen()
             }
 
             composable(Route.More.path) {

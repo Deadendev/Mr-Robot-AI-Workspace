@@ -45,7 +45,8 @@ object SystemPromptBuilder {
     fun build(
         soul: SoulConfig,
         memories: List<MemoryEntry>,
-        activeAgent: Agent? = null
+        activeAgent: Agent? = null,
+        activeSkills: List<Skill> = emptyList()
     ): String = buildString {
         if (activeAgent != null) {
             append("You are ${activeAgent.name}.\n")
@@ -64,6 +65,8 @@ object SystemPromptBuilder {
         }
 
         append(soul.effectivePrompt())
+
+        appendActiveSkills(activeSkills)
 
         // Always-on real-time context (date/time/timezone) — eliminates
         // "I don't have access to the current time" responses.
@@ -100,6 +103,21 @@ object SystemPromptBuilder {
             entries = byCategory[MemoryCategory.ERROR].orEmpty(),
             withHitCount = false
         )
+    }
+
+    private fun StringBuilder.appendActiveSkills(skills: List<Skill>) {
+        val active = skills.filter { it.enabled && it.instructions.isNotBlank() }
+        if (active.isEmpty()) return
+
+        append("\n\n## Active Skills\n")
+        append(
+            "These are user-equipped capabilities. Apply each one to every reply " +
+                "unless the user explicitly asks otherwise.\n\n"
+        )
+        active.forEach { skill ->
+            append("### ").append(skill.name).append('\n')
+            append(skill.instructions.trim()).append("\n\n")
+        }
     }
 
     private fun StringBuilder.appendCategory(

@@ -43,7 +43,8 @@ data class ChatReply(
 class ChatRepository(
     private val agentConfigStore: AgentConfigStore? = null,
     private val memoryStore: MemoryStore? = null,
-    private val agentStore: AgentStore? = null
+    private val agentStore: AgentStore? = null,
+    private val skillStore: SkillStore? = null
 ) {
 
     private val directiveParser: MemoryDirectiveParser? =
@@ -155,10 +156,12 @@ class ChatRepository(
         val soul = agentConfigStore?.getSoul() ?: return null
         val memories = memoryStore?.getAll().orEmpty()
         val activeAgent = agentStore?.getActiveAgent()
+        val activeSkills = skillStore?.getEnabled().orEmpty()
         return SystemPromptBuilder.build(
             soul = soul,
             memories = memories,
-            activeAgent = activeAgent
+            activeAgent = activeAgent,
+            activeSkills = activeSkills
         )
     }
 }
