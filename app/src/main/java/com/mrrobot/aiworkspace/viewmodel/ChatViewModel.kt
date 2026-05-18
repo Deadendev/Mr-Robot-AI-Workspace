@@ -8,6 +8,7 @@ import com.mrrobot.aiworkspace.data.Agent
 import com.mrrobot.aiworkspace.data.AgentConfigStore
 import com.mrrobot.aiworkspace.data.AgentStore
 import com.mrrobot.aiworkspace.data.AppSettings
+import com.mrrobot.aiworkspace.data.AttachmentExtractor
 import com.mrrobot.aiworkspace.data.ChatHistoryStore
 import com.mrrobot.aiworkspace.data.ChatMessage
 import com.mrrobot.aiworkspace.data.ChatRepository
@@ -282,6 +283,34 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             visionImages = merged.count { it.isImage },
             error = ""
         )
+
+        // Kick off background extraction for any newly-added attachments
+        // whose content hasn't been pulled out yet. Each completes
+        // independently and updates the matching entry by stableKey.
+        items.forEach { incoming ->
+            val needsWork = incoming.uri != null &&
+                incoming.imageDataUrl.isNullOrBlank() &&
+                incoming.readableText.isBlank() &&
+                incoming.extractedText.isNullOrBlank()
+            if (!needsWork) return@forEach
+
+            viewModelScope.launch {
+                val enriched = AttachmentExtractor.enrich(
+                    context = getApplication<Application>().applicationContext,
+                    base = incoming
+                )
+                // Swap the entry in place (preserve order, match by key).
+                val current = _uiState.value.selectedAttachments
+                val updated = current.map {
+                    if (it.stableKey == enriched.stableKey) enriched else it
+                }
+                _uiState.value = _uiState.value.copy(
+                    selectedAttachments = updated,
+                    readableFiles = updated.count { it.isReadable },
+                    visionImages = updated.count { it.isImage }
+                )
+            }
+        }
     }
 
     fun removeAttachment(attachment: ChatAttachment) {
@@ -652,10 +681,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         activeJob = viewModelScope.launch {
             val requestMessages = _uiState.value.messages
                 .filter { it.role == "user" || it.role == "assistant" }
-                .map {
+                .map { ui ->
                     ChatMessage(
-                        role = it.role,
-                        content = it.content
+                        role = ui.role,
+                        content = ui.content,
+                        // Forward any extracted/captured image data URLs so
+                        // vision-capable models actually see the attachments.
+                        imageDataUrls = if (ui.role == "user") {
+                            ui.attachments.mapNotNull { it.imageDataUrl }
+                                .filter { it.isNotBlank() }
+                        } else emptyList()
                     )
                 }
                 .toMutableList()

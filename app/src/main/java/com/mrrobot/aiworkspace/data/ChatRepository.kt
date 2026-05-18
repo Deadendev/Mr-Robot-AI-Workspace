@@ -2,7 +2,13 @@ package com.mrrobot.aiworkspace.data
 
 data class ChatMessage(
     val role: String,
-    val content: String
+    val content: String,
+    /**
+     * Optional inline image data URLs (e.g. "data:image/jpeg;base64,...") to
+     * attach to this message. Only used for user messages and only honoured
+     * by providers/models that support multimodal input.
+     */
+    val imageDataUrls: List<String> = emptyList()
 )
 
 /**

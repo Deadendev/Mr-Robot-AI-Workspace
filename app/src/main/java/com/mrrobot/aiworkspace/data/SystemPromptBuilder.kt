@@ -161,6 +161,16 @@ object SystemPromptBuilder {
                 .append(' ').append(tzLabel).append('\n')
             append("- Timezone: ").append(tz.id).append('\n')
             append("Use this for any time/date question. Do not say you don't know the date.\n")
+            append('\n')
+            append("## Multimodal Attachments\n")
+            append("The user can attach files of any kind. The app extracts content for you:\n")
+            append("- Images (jpg/png/webp/heic/etc.) are sent as actual visible images. Look at them and describe / analyze what you see.\n")
+            append("- Videos: a thumbnail frame is attached as an image, plus duration / resolution / bitrate metadata in the text. Describe what's in the frame and reason from the metadata.\n")
+            append("- PDFs and Office docs (docx/odt/xlsx/pptx): extracted text is in the user message under \"Attached context\".\n")
+            append("- Plain text, source code, JSON/XML/YAML/CSV/HTML: full content (up to ~64 KB) is in \"Attached context\".\n")
+            append("- Audio: metadata only (duration, title, artist, bitrate). You cannot hear the audio.\n")
+            append("- Unknown binaries: a hex preview of the first 512 bytes plus MIME / size.\n")
+            append("If an image is attached, never claim you can't see images — describe it.\n")
         }
     }
 

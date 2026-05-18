@@ -182,11 +182,40 @@ object ProviderChatClient {
         )
 
         messages.forEach { message ->
-            jsonMessages.put(
-                JSONObject()
-                    .put("role", message.role)
-                    .put("content", message.content)
-            )
+            // If a user message has attached images, send a multimodal
+            // content array (OpenAI-compatible "image_url" parts). Otherwise
+            // fall back to a plain text content field for max compatibility.
+            if (message.role == "user" && message.imageDataUrls.isNotEmpty()) {
+                val parts = JSONArray()
+                if (message.content.isNotBlank()) {
+                    parts.put(
+                        JSONObject()
+                            .put("type", "text")
+                            .put("text", message.content)
+                    )
+                }
+                message.imageDataUrls.forEach { dataUrl ->
+                    parts.put(
+                        JSONObject()
+                            .put("type", "image_url")
+                            .put(
+                                "image_url",
+                                JSONObject().put("url", dataUrl)
+                            )
+                    )
+                }
+                jsonMessages.put(
+                    JSONObject()
+                        .put("role", message.role)
+                        .put("content", parts)
+                )
+            } else {
+                jsonMessages.put(
+                    JSONObject()
+                        .put("role", message.role)
+                        .put("content", message.content)
+                )
+            }
         }
 
         val payload = JSONObject()
@@ -223,11 +252,44 @@ object ProviderChatClient {
         messages
             .filter { it.role == "user" || it.role == "assistant" }
             .forEach { message ->
-                anthropicMessages.put(
-                    JSONObject()
-                        .put("role", message.role)
-                        .put("content", message.content)
-                )
+                if (message.role == "user" && message.imageDataUrls.isNotEmpty()) {
+                    // Anthropic multimodal: content is an array with
+                    // {type:"text", ...} and {type:"image", source:{...}} blocks.
+                    val content = JSONArray()
+                    if (message.content.isNotBlank()) {
+                        content.put(
+                            JSONObject()
+                                .put("type", "text")
+                                .put("text", message.content)
+                        )
+                    }
+                    message.imageDataUrls.forEach { dataUrl ->
+                        val (mediaType, b64) = splitDataUrl(dataUrl)
+                            ?: return@forEach
+                        content.put(
+                            JSONObject()
+                                .put("type", "image")
+                                .put(
+                                    "source",
+                                    JSONObject()
+                                        .put("type", "base64")
+                                        .put("media_type", mediaType)
+                                        .put("data", b64)
+                                )
+                        )
+                    }
+                    anthropicMessages.put(
+                        JSONObject()
+                            .put("role", message.role)
+                            .put("content", content)
+                    )
+                } else {
+                    anthropicMessages.put(
+                        JSONObject()
+                            .put("role", message.role)
+                            .put("content", message.content)
+                    )
+                }
             }
 
         val payload = JSONObject()
@@ -259,12 +321,33 @@ object ProviderChatClient {
         messages: List<ChatMessage>,
         systemPrompt: String
     ): String {
-        val prompt = buildString {
+        // Build a single contents array. We collapse the system prompt and
+        // assistant/user history into one composite turn, then attach any
+        // images from the most-recent user message as inline_data parts.
+        val textPrompt = buildString {
             append("SYSTEM: ").append(systemPrompt).append("\n\n")
             messages.forEach { message ->
-                append(message.role.uppercase()).append(": ").append(message.content).append("\n\n")
+                append(message.role.uppercase()).append(": ")
+                    .append(message.content).append("\n\n")
             }
         }.trim()
+
+        val parts = JSONArray()
+        parts.put(JSONObject().put("text", textPrompt))
+
+        // Attach images from the latest user message, if any.
+        messages.lastOrNull { it.role == "user" }?.imageDataUrls
+            ?.forEach { dataUrl ->
+                val (mime, b64) = splitDataUrl(dataUrl) ?: return@forEach
+                parts.put(
+                    JSONObject().put(
+                        "inline_data",
+                        JSONObject()
+                            .put("mime_type", mime)
+                            .put("data", b64)
+                    )
+                )
+            }
 
         val endpoint =
             "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=" +
@@ -273,15 +356,7 @@ object ProviderChatClient {
         val payload = JSONObject()
             .put(
                 "contents",
-                JSONArray()
-                    .put(
-                        JSONObject()
-                            .put(
-                                "parts",
-                                JSONArray()
-                                    .put(JSONObject().put("text", prompt))
-                            )
-                    )
+                JSONArray().put(JSONObject().put("parts", parts))
             )
 
         val response = postJson(
@@ -334,5 +409,22 @@ object ProviderChatClient {
         }
 
         return response
+    }
+
+    /**
+     * Split a data URL like `data:image/jpeg;base64,XXXX` into
+     * (mime_type, base64_payload). Returns null if [dataUrl] doesn't
+     * match the expected format.
+     */
+    private fun splitDataUrl(dataUrl: String): Pair<String, String>? {
+        if (!dataUrl.startsWith("data:")) return null
+        val comma = dataUrl.indexOf(',')
+        if (comma <= 0) return null
+        val header = dataUrl.substring(5, comma) // skip "data:"
+        val payload = dataUrl.substring(comma + 1)
+        val semi = header.indexOf(';')
+        val mime = if (semi > 0) header.substring(0, semi) else header
+        if (mime.isBlank() || payload.isBlank()) return null
+        return mime to payload
     }
 }
