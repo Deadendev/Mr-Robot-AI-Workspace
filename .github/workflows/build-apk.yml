@@ -47,8 +47,16 @@ jobs:
           find . -maxdepth 3 -type f | sort
 
       - name: Build APK with logs
+        shell: bash
         run: |
-          ./gradlew clean assembleDebug --stacktrace --info | tee build-log.txt
+          set -o pipefail
+          ./gradlew clean assembleDebug --stacktrace --info 2>&1 | tee build-log.txt
+
+      - name: List APK output dir
+        if: always()
+        run: |
+          echo "Contents of app/build/outputs/apk:"
+          ls -laR app/build/outputs/apk || echo "(directory does not exist)"
 
       - name: Upload build logs
         uses: actions/upload-artifact@v4
@@ -63,3 +71,4 @@ jobs:
         with:
           name: mr-robot-ai-workspace-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
