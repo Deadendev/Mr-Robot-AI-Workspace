@@ -2,6 +2,8 @@ package com.mrrobot.aiworkspace.data
 
 import com.mrrobot.aiworkspace.sandbox.SandboxManager
 import com.mrrobot.aiworkspace.sandbox.SandboxState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
@@ -44,8 +46,15 @@ class SandboxToolHost(private val sandboxManager: SandboxManager) {
             return ToolResult("shell: $cmd", false, it)
         }
 
-        val result = sandboxManager.createProotExecutor()
-            .execute(command = cmd, timeoutSeconds = timeoutSeconds)
+        // ProotExecutor.execute() ultimately calls Process.waitFor(), which
+        // is blocking. If the suspend caller is on the Main dispatcher (the
+        // default for viewModelScope.launch), the UI thread is parked for
+        // the entire command duration — up to `timeoutSeconds`. Force IO so
+        // long shell commands never freeze the chat screen.
+        val result = withContext(Dispatchers.IO) {
+            sandboxManager.createProotExecutor()
+                .execute(command = cmd, timeoutSeconds = timeoutSeconds)
+        }
 
         val ok = result["success"] as? Boolean ?: false
         val timedOut = result["timed_out"] as? Boolean ?: false

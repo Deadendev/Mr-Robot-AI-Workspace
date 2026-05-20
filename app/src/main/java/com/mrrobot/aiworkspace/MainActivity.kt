@@ -21,9 +21,6 @@ import com.mrrobot.aiworkspace.data.SettingsStore
 import com.mrrobot.aiworkspace.navigation.AppNavGraph
 import com.mrrobot.aiworkspace.ui.screens.SplashScreen
 import com.mrrobot.aiworkspace.ui.theme.MrRobotTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
 
@@ -39,21 +36,22 @@ class MainActivity : ComponentActivity() {
 
         val settingsStore = SettingsStore(applicationContext)
 
-        val initialSettings = runCatching {
-            runBlocking(Dispatchers.IO) {
-                settingsStore.settingsFlow.first()
-            }
-        }.getOrDefault(AppSettings())
-
+        // Apply system bars eagerly with safe defaults; the Compose layer below
+        // re-applies them once the real settings are emitted by the flow. We
+        // intentionally do NOT block the main thread on a DataStore read here.
+        // Any blocking I/O on cold start is directly visible as launch jank.
         applySystemBars(
-            themeMode = initialSettings.themeMode,
+            themeMode = AppThemeMode.Auto,
             systemDark = false,
-            splashMode = false
+            splashMode = true
         )
 
         setContent {
+            // First emission of `settingsFlow` happens off the main thread.
+            // Until it arrives, `settings` reflects the default `AppSettings()`
+            // — which is fine for a splash frame.
             val settings by settingsStore.settingsFlow.collectAsState(
-                initial = initialSettings
+                initial = AppSettings()
             )
 
             val systemDark = isSystemInDarkTheme()
