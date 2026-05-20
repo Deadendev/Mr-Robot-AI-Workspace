@@ -3,6 +3,7 @@ package com.mrrobot.aiworkspace.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.mrrobot.aiworkspace.HeartbeatService
 import com.mrrobot.aiworkspace.data.AgentConfigStore
 import com.mrrobot.aiworkspace.data.AppSettings
 import com.mrrobot.aiworkspace.data.ChatRepository
@@ -160,6 +161,10 @@ class SoulHeartbeatViewModel(application: Application) : AndroidViewModel(applic
                     lastHeartbeatEpochMs = current.lastHeartbeatEpochMs
                 )
             )
+            // Start or stop the foreground heartbeat service immediately. The
+            // Activity also re-asserts on every onStart, but that wouldn't
+            // help a user who toggles the switch and stays on this screen.
+            HeartbeatService.applyConfigFromBackground(getApplication())
             _uiState.value = _uiState.value.copy(
                 isHeartbeatDirty = false,
                 savedMessage = "Heartbeat saved."

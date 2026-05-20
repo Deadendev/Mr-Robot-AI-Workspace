@@ -15,12 +15,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import com.mrrobot.aiworkspace.data.AppSettings
 import com.mrrobot.aiworkspace.data.AppThemeMode
 import com.mrrobot.aiworkspace.data.SettingsStore
 import com.mrrobot.aiworkspace.navigation.AppNavGraph
 import com.mrrobot.aiworkspace.ui.screens.SplashScreen
 import com.mrrobot.aiworkspace.ui.theme.MrRobotTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -80,6 +82,21 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph()
                 }
             }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Re-assert the heartbeat foreground service every time the activity
+        // is brought to the foreground. `onCreate` alone is not enough:
+        // aggressive OEM battery managers (MIUI, EMUI/Huawei) sometimes kill
+        // the foreground service while the activity is still alive in the
+        // background, and without this the user would have to fully close
+        // and reopen the app to get scheduling back. `applyConfigFromBackground`
+        // reads the current `HeartbeatConfig.enabled` and either starts or
+        // stops the service accordingly — both are idempotent.
+        lifecycleScope.launch {
+            HeartbeatService.applyConfigFromBackground(this@MainActivity)
         }
     }
 

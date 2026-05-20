@@ -9,6 +9,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Required for the heartbeat foreground service. POST_NOTIFICATIONS is
+         only used to surface the persistent "Heartbeat active" notification
+         that keeps our process alive; it is not used for marketing pings. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -40,6 +47,14 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Heartbeat foreground service. `dataSync` is the appropriate
+             foreground type for periodic background sync work (Android 14+
+             requires a typed FGS for any new ones we declare). -->
+        <service
+            android:name=".HeartbeatService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
     </application>
 
