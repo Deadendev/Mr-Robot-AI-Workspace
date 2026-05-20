@@ -59,6 +59,7 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     implementation("org.json:json:20240303")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")

@@ -10,9 +10,12 @@ import java.util.UUID
 /**
  * Bridges the AI's sandbox tool directives to the on-device Linux sandbox.
  *
- * Each operation spawns a one-shot proot process via [SandboxManager].
- * File writes stage content through the host-mounted /tmp dir so that
- * multi-line content with quotes/newlines round-trips intact.
+ * Shell commands run through a single long-lived bash session
+ * ([SandboxManager.aiShell]) so state (cwd, env vars, sourced scripts,
+ * aliases) persists between commands — the AI can `cd` once and have
+ * follow-up commands execute in the same directory. File writes still
+ * stage content through the host-mounted /tmp dir so multi-line content
+ * with quotes/newlines round-trips intact.
  */
 class SandboxToolHost(private val sandboxManager: SandboxManager) {
 
@@ -46,14 +49,11 @@ class SandboxToolHost(private val sandboxManager: SandboxManager) {
             return ToolResult("shell: $cmd", false, it)
         }
 
-        // ProotExecutor.execute() ultimately calls Process.waitFor(), which
-        // is blocking. If the suspend caller is on the Main dispatcher (the
-        // default for viewModelScope.launch), the UI thread is parked for
-        // the entire command duration — up to `timeoutSeconds`. Force IO so
-        // long shell commands never freeze the chat screen.
+        // The persistent shell uses Process.waitFor / pipe reads
+        // internally; force IO so a long-running command never blocks
+        // whatever dispatcher the suspend caller is on.
         val result = withContext(Dispatchers.IO) {
-            sandboxManager.createProotExecutor()
-                .execute(command = cmd, timeoutSeconds = timeoutSeconds)
+            sandboxManager.aiShell().run(command = cmd, timeoutSeconds = timeoutSeconds)
         }
 
         val ok = result["success"] as? Boolean ?: false
@@ -62,6 +62,7 @@ class SandboxToolHost(private val sandboxManager: SandboxManager) {
         val stdout = (result["stdout"] as? String).orEmpty()
         val stderr = (result["stderr"] as? String).orEmpty()
         val errorMsg = (result["error"] as? String).orEmpty()
+        val shellDied = result["shell_died"] as? Boolean ?: false
 
         val body = buildString {
             append("$ ").append(cmd).append('\n')
@@ -69,8 +70,11 @@ class SandboxToolHost(private val sandboxManager: SandboxManager) {
             if (stderr.isNotEmpty()) append("[stderr]\n").append(stderr.trimEnd()).append('\n')
             if (errorMsg.isNotEmpty()) append("[error] ").append(errorMsg).append('\n')
             if (!ok) {
-                if (timedOut) append("[timed out after ${timeoutSeconds}s]")
-                else append("[exit $exit]")
+                when {
+                    timedOut -> append("[timed out after ${timeoutSeconds}s]")
+                    shellDied -> append("[shell session ended; next command will start a fresh one]")
+                    else -> append("[exit $exit]")
+                }
             }
         }.trimEnd()
 
