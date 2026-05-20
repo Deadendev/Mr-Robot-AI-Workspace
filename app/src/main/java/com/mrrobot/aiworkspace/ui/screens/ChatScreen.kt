@@ -202,11 +202,25 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(state.messages.size, state.isLoading) {
-        if (state.messages.isNotEmpty()) {
-            scope.launch {
-                listState.animateScrollToItem(state.messages.lastIndex)
-            }
+    // Auto-scroll only when:
+    //  1) the message list actually grew (new turn), AND
+    //  2) the user is already near the bottom — so scrolling up to read
+    //     a previous reply doesn't get hijacked when isLoading flips, or
+    //     when a streaming reply lands on screen.
+    //
+    // Keying only on `state.messages.size` (not `state.isLoading`) means
+    // the scroll fires once per turn instead of twice (load-on, load-off).
+    LaunchedEffect(state.messages.size) {
+        if (state.messages.isEmpty()) return@LaunchedEffect
+        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+        val total = listState.layoutInfo.totalItemsCount
+        // "Near the bottom" = the last visible item is within 2 of the end,
+        // OR the list isn't full yet. The first turn always satisfies this.
+        val nearBottom = last == null || last.index >= total - 2
+        if (nearBottom) {
+            // scrollToItem (instant) is less jarring than animateScrollToItem
+            // when the user has just sent a message and is waiting for a reply.
+            listState.scrollToItem(state.messages.lastIndex)
         }
     }
 
@@ -370,14 +384,19 @@ fun ChatScreen(
                     } else {
                         items(
                             items = state.messages,
-                            key = { it.id }
+                            key = { it.id },
+                            // Per-role recycling — Compose can reuse slot
+                            // measurement and layout between same-role items
+                            // (user / assistant / system) instead of treating
+                            // every bubble as a fresh type.
+                            contentType = { it.role }
                         ) { message ->
                             ChatBubble(message = message)
                         }
                     }
 
                     if (state.isLoading) {
-                        item { ThinkingBubble() }
+                        item(key = "loading_thinking") { ThinkingBubble() }
                     }
                 }
 
