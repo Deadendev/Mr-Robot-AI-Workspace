@@ -13,56 +13,6 @@ import java.net.URLEncoder
 
 object ProviderChatClient {
 
-    /**
-     * Stream a chat completion when the provider supports OpenAI-compatible
-     * SSE; otherwise fall through to the buffered [generateReply] path.
-     *
-     * [onDelta] is invoked on whatever thread the OkHttp BufferedSource read
-     * delivered the chunk on. For Anthropic/Gemini (non-OpenAI shape),
-     * [onDelta] is fired ONCE with the full reply once the buffered call
-     * returns — so callers can use a single rendering path regardless of
-     * whether the underlying provider streams or not.
-     *
-     * Tool-loop intermediate turns deliberately don't stream: we only want
-     * the final answer to paint progressively. See
-     * [ChatRepository.sendMessage]'s `onAssistantDelta` parameter.
-     */
-    suspend fun streamReply(
-        settings: AppSettings,
-        messages: List<ChatMessage>,
-        systemPrompt: String? = null,
-        onDelta: (String) -> Unit
-    ): String {
-        val apiKey = settings.activeApiKey()
-        val provider = settings.selectedProvider
-        val model = settings.activeModel()
-
-        if (apiKey.isBlank()) {
-            throw IllegalStateException("No active AI model. Open Settings, add an API key, then tap Save & Activate.")
-        }
-
-        val effectiveSystemPrompt = systemPrompt?.takeIf { it.isNotBlank() }
-            ?: DEFAULT_SYSTEM_PROMPT
-
-        return if (StreamingChatClient.supports(provider)) {
-            StreamingChatClient.streamReply(
-                provider = provider,
-                apiKey = apiKey,
-                model = model,
-                messages = messages,
-                systemPrompt = effectiveSystemPrompt,
-                onDelta = onDelta
-            )
-        } else {
-            // Anthropic / Gemini: buffered fallback. Emit the whole thing as
-            // a single delta so the caller gets the same shape it would for
-            // a streamed reply.
-            val full = generateReply(settings, messages, systemPrompt)
-            if (full.isNotEmpty()) onDelta(full)
-            full
-        }
-    }
-
     suspend fun generateReply(
         settings: AppSettings,
         messages: List<ChatMessage>,
