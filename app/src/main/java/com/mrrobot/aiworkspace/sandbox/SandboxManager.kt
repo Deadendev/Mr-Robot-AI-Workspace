@@ -163,6 +163,34 @@ class SandboxManager private constructor(private val context: Context) {
         tmpPath = tmpPath
     )
 
+    // One persistent bash session for AI-driven shell commands. Lazily
+    // created on first access so we don't pay startup cost until the AI
+    // actually runs a command. Callers (currently `SandboxToolHost`) get
+    // state preservation between commands — `cd`, `export`, sourced
+    // scripts, aliases all survive. For one-shot UI ops (the Sandbox
+    // screen's file create/edit) `createProotExecutor()` is still the
+    // right tool: those don't want or need shared state.
+    @Volatile
+    private var aiShell: PersistentSandboxShell? = null
+
+    fun aiShell(): PersistentSandboxShell {
+        return aiShell ?: synchronized(this) {
+            aiShell ?: PersistentSandboxShell(createProotExecutor(), tmpPath).also {
+                aiShell = it
+            }
+        }
+    }
+
+    /**
+     * Tear down the persistent AI shell. Next call to [aiShell] will
+     * lazily restart it. Used by [uninstall] and exposed for UI-driven
+     * "reset session" actions.
+     */
+    fun resetAiShell() {
+        aiShell?.reset()
+        aiShell = null
+    }
+
     fun installBasicPackages() {
         if (currentJob?.isActive == true) return
         val packages = listOf(
@@ -198,6 +226,10 @@ class SandboxManager private constructor(private val context: Context) {
 
     fun uninstall() {
         scope.launch {
+            // Tear down any live persistent shell first — leaving it
+            // running while we delete its rootfs would surface confusing
+            // I/O errors on the next AI command.
+            resetAiShell()
             sandboxDir.deleteRecursively()
             _state.value = SandboxState.NotInstalled
         }

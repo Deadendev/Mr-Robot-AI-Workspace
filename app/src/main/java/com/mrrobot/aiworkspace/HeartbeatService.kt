@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.util.Log
 import com.mrrobot.aiworkspace.data.AgentConfigStore
 import com.mrrobot.aiworkspace.data.HeartbeatScheduler
+import com.mrrobot.aiworkspace.data.HeartbeatWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -165,6 +166,7 @@ class HeartbeatService : Service() {
             val intent = Intent(context.applicationContext, HeartbeatService::class.java)
             runCatching { context.applicationContext.stopService(intent) }
             HeartbeatScheduler.getInstance(context.applicationContext).stop()
+            HeartbeatWorker.cancel(context.applicationContext)
         }
 
         /**
@@ -182,6 +184,12 @@ class HeartbeatService : Service() {
             }
             if (enabled) {
                 startServiceCompat(app)
+                // Belt-and-braces: WorkManager periodic worker fires
+                // even when the FGS is killed by an aggressive OEM or
+                // the OS enters deep Doze. 15-min minimum period; the
+                // worker no-ops if the FGS already fired in the same
+                // window (isHeartbeatDue is the gate).
+                HeartbeatWorker.enqueue(app)
             } else {
                 stop(app)
             }
