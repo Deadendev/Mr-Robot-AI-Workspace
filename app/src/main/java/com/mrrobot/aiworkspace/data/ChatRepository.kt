@@ -64,32 +64,9 @@ class ChatRepository(
     private val directiveParser: MemoryDirectiveParser? =
         memoryStore?.let { MemoryDirectiveParser(it) }
 
-    /**
-     * Send one user turn and run the tool loop until the model is done.
-     *
-     * [onAssistantDelta], if provided, is invoked with chunks of text from
-     * each model call as they stream in (when the active provider supports
-     * SSE — see [StreamingChatClient.supports]). The caller is responsible
-     * for resetting/clearing UI state between turns; we fire a synthetic
-     * empty-string delta at the start of each new turn so the UI can
-     * detect "new turn started, replace any previous in-flight text".
-     *
-     * For NON-streaming providers (Anthropic, Gemini), [onAssistantDelta]
-     * fires once with the full reply. The accumulated text returned at
-     * the end is identical in both cases.
-     *
-     * Tool-loop intermediate turns DO stream (we have no way to know
-     * mid-stream that a turn is intermediate vs. final), so the user may
-     * briefly see directive markup like `[SEARCH ...]` flash before the
-     * loop strips it and the next turn replaces the bubble. This is
-     * acceptable: it makes long tool sequences feel responsive, and
-     * the synthetic empty-string delta at each turn boundary lets the
-     * UI clear stale text.
-     */
     suspend fun sendMessage(
         settings: AppSettings,
-        messages: List<ChatMessage>,
-        onAssistantDelta: ((String) -> Unit)? = null
+        messages: List<ChatMessage>
     ): Result<ChatReply> {
         val systemPrompt = buildSystemPrompt()
         return runCatching {
@@ -97,28 +74,11 @@ class ChatRepository(
             val performedSearches = mutableListOf<String>()
             val sandboxOps = mutableListOf<String>()
 
-            // Wrapper that signals "new turn starting" with an empty
-            // string before forwarding subsequent chunks. The UI uses
-            // the empty delta as a clear-and-restart sentinel.
-            val streamTurn: suspend () -> String = {
-                if (onAssistantDelta != null) {
-                    onAssistantDelta("")
-                    ProviderChatClient.streamReply(
-                        settings = settings,
-                        messages = workingMessages,
-                        systemPrompt = systemPrompt,
-                        onDelta = onAssistantDelta
-                    )
-                } else {
-                    ProviderChatClient.generateReply(
-                        settings = settings,
-                        messages = workingMessages,
-                        systemPrompt = systemPrompt
-                    )
-                }
-            }
-
-            var raw = streamTurn()
+            var raw = ProviderChatClient.generateReply(
+                settings = settings,
+                messages = workingMessages,
+                systemPrompt = systemPrompt
+            )
 
             // Tool loop: keep running [SEARCH] / [SHELL] / [FILE_*] directives
             // and feeding the results back until the model stops emitting them
@@ -172,7 +132,11 @@ class ChatRepository(
                     )
                 )
 
-                raw = streamTurn()
+                raw = ProviderChatClient.generateReply(
+                    settings = settings,
+                    messages = workingMessages,
+                    systemPrompt = systemPrompt
+                )
                 rounds++
             }
 
@@ -215,8 +179,7 @@ class ChatRepository(
 
         return sendMessage(
             settings = settings,
-            messages = messages,
-            onAssistantDelta = null
+            messages = messages
         )
     }
 
