@@ -23,6 +23,7 @@ import com.mrrobot.aiworkspace.sandbox.SandboxManager
 import com.mrrobot.aiworkspace.data.StoredChatMessage
 import com.mrrobot.aiworkspace.data.deriveSessionTitle
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -704,23 +705,70 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            // Pre-insert a placeholder assistant bubble. We keep its id
+            // stable for the duration of the call so the LazyColumn can
+            // recycle the same row as text streams in. Tracked by id (not
+            // index) because tool-loop turns can interleave system pills
+            // and we don't want to rewrite the wrong row.
+            val streamingId = System.nanoTime()
+            _uiState.value = _uiState.value.copy(
+                messages = _uiState.value.messages + ChatUiMessage(
+                    id = streamingId,
+                    role = "assistant",
+                    content = ""
+                )
+            )
+
+            // Buffer accumulates the current turn's text. Reset to empty
+            // when the repository signals "new turn" via an empty delta —
+            // tool-loop intermediate turns paint then get replaced by the
+            // next turn's text rather than concatenated.
+            val buffer = StringBuilder()
+
+            val deltaHandler: (String) -> Unit = { chunk ->
+                if (chunk.isEmpty()) {
+                    // New-turn sentinel: discard any directive markup
+                    // from the previous turn so the user doesn't see
+                    // [SHELL ...] flash and then permanent text on top.
+                    buffer.setLength(0)
+                    viewModelScope.launch(Dispatchers.Main.immediate) {
+                        replaceMessageContent(streamingId, "")
+                    }
+                } else {
+                    buffer.append(chunk)
+                    val snapshot = buffer.toString()
+                    viewModelScope.launch(Dispatchers.Main.immediate) {
+                        replaceMessageContent(streamingId, snapshot)
+                    }
+                }
+            }
+
             val result = repository.sendMessage(
                 settings = settings,
-                messages = requestMessages
+                messages = requestMessages,
+                onAssistantDelta = deltaHandler
             )
 
             result
                 .onSuccess { reply ->
+                    // Replace the placeholder with the FINAL cleaned text
+                    // (directives stripped, memory ops applied) and append
+                    // any side-effect pill. We intentionally rebuild the
+                    // tail of the message list rather than mutating in
+                    // place: a streamed reply that mid-emitted a directive
+                    // will currently show that directive in the buffer
+                    // until this swap lands.
+                    val current = _uiState.value.messages
+                    val withoutPlaceholder = current.filterNot { it.id == streamingId }
                     val newMessages = mutableListOf<ChatUiMessage>().apply {
-                        addAll(_uiState.value.messages)
+                        addAll(withoutPlaceholder)
                         add(
                             ChatUiMessage(
+                                id = streamingId,
                                 role = "assistant",
                                 content = reply.text
                             )
                         )
-                        // Surface the auto-save / search inline so the user
-                        // sees the AI actually did something.
                         if (reply.didMutateMemory || reply.didSearch || reply.didUseSandbox) {
                             val parts = buildList {
                                 if (reply.searchedQueries.isNotEmpty()) {
@@ -754,14 +802,45 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     persistCurrentSession()
                 }
                 .onFailure { throwable ->
-                    if (throwable is CancellationException) return@onFailure
+                    if (throwable is CancellationException) {
+                        // User cancelled mid-stream. Keep whatever streamed
+                        // so far if there's anything, otherwise drop the
+                        // empty placeholder to avoid a stuck blank bubble.
+                        val partial = buffer.toString()
+                        _uiState.value = if (partial.isBlank()) {
+                            _uiState.value.copy(
+                                messages = _uiState.value.messages.filterNot { it.id == streamingId },
+                                isLoading = false
+                            )
+                        } else {
+                            _uiState.value.copy(isLoading = false)
+                        }
+                        return@onFailure
+                    }
 
                     _uiState.value = _uiState.value.copy(
+                        // Drop the placeholder; the error pill is enough.
+                        messages = _uiState.value.messages.filterNot { it.id == streamingId },
                         isLoading = false,
                         error = throwable.message ?: "AI request failed."
                     )
                 }
         }
+    }
+
+    /**
+     * Replace the content of the assistant message identified by
+     * [messageId]. No-op if the message has been removed (e.g. the
+     * caller cancelled and the placeholder was dropped). Called from
+     * the streaming delta handler on the main thread.
+     */
+    private fun replaceMessageContent(messageId: Long, content: String) {
+        val current = _uiState.value
+        val idx = current.messages.indexOfFirst { it.id == messageId }
+        if (idx < 0) return
+        val updated = current.messages.toMutableList()
+        updated[idx] = updated[idx].copy(content = content)
+        _uiState.value = current.copy(messages = updated)
     }
 
     private fun buildAttachmentContext(
