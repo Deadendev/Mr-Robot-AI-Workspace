@@ -45,14 +45,27 @@ object ProviderChatClient {
             ?: DEFAULT_SYSTEM_PROMPT
 
         return if (StreamingChatClient.supports(provider)) {
-            StreamingChatClient.streamReply(
-                provider = provider,
-                apiKey = apiKey,
-                model = model,
-                messages = messages,
-                systemPrompt = effectiveSystemPrompt,
-                onDelta = onDelta
-            )
+            try {
+                StreamingChatClient.streamReply(
+                    provider = provider,
+                    apiKey = apiKey,
+                    model = model,
+                    messages = messages,
+                    systemPrompt = effectiveSystemPrompt,
+                    onDelta = onDelta
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e // Don't swallow coroutine cancellation
+            } catch (_: Throwable) {
+                // Streaming failed (network issue, provider rejected stream:true,
+                // SSE parse error, etc.). Fall back to the buffered path which
+                // uses HttpURLConnection — different network stack, no stream flag.
+                // This makes the app resilient to providers/models that don't
+                // support SSE or have intermittent streaming issues.
+                val full = generateReply(settings, messages, systemPrompt)
+                if (full.isNotEmpty()) onDelta(full)
+                full
+            }
         } else {
             // Anthropic / Gemini: buffered fallback. Emit the whole thing as
             // a single delta so the caller gets the same shape it would for
