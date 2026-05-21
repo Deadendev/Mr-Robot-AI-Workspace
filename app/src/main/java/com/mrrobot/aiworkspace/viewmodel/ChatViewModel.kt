@@ -136,7 +136,10 @@ data class ChatUiState(
     val memoryCount: Int = 0,
     val hasCustomSoul: Boolean = false,
     val heartbeatEnabled: Boolean = false,
-    val heartbeatRunning: Boolean = false
+    val heartbeatRunning: Boolean = false,
+
+    // ─── Tool execution feedback ───
+    val executingTools: List<String> = emptyList()
 ) {
     val userMessages: Int
         get() = messages.count { it.role == "user" }
@@ -587,6 +590,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         _uiState.value = _uiState.value.copy(
             isLoading = false,
+            executingTools = emptyList(),
             error = "Generation stopped."
         )
     }
@@ -670,6 +674,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             visionImages = 0,
             isLoading = true,
             error = "",
+            executingTools = emptyList(),
             lastUserPrompt = prompt,
             apiKey = settings.activeApiKey(),
             model = settings.activeModel(),
@@ -747,6 +752,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.value = _uiState.value.copy(
                         messages = newMessages,
                         isLoading = false,
+                        executingTools = emptyList(),
                         error = ""
                     )
 
@@ -758,6 +764,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        executingTools = emptyList(),
                         error = throwable.message ?: "AI request failed."
                     )
                 }

@@ -83,7 +83,6 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -95,6 +94,8 @@ import com.mrrobot.aiworkspace.R
 import com.mrrobot.aiworkspace.data.ChatSession
 import com.mrrobot.aiworkspace.navigation.Route
 import com.mrrobot.aiworkspace.ui.components.BrainStatusBanner
+import com.mrrobot.aiworkspace.ui.components.MarkdownText
+import com.mrrobot.aiworkspace.ui.components.WaitingResponseRow
 import com.mrrobot.aiworkspace.viewmodel.ChatAttachment
 import com.mrrobot.aiworkspace.viewmodel.ChatUiMessage
 import com.mrrobot.aiworkspace.viewmodel.ChatViewModel
@@ -202,25 +203,11 @@ fun ChatScreen(
         }
     }
 
-    // Auto-scroll only when:
-    //  1) the message list actually grew (new turn), AND
-    //  2) the user is already near the bottom — so scrolling up to read
-    //     a previous reply doesn't get hijacked when isLoading flips, or
-    //     when a streaming reply lands on screen.
-    //
-    // Keying only on `state.messages.size` (not `state.isLoading`) means
-    // the scroll fires once per turn instead of twice (load-on, load-off).
-    LaunchedEffect(state.messages.size) {
-        if (state.messages.isEmpty()) return@LaunchedEffect
-        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-        val total = listState.layoutInfo.totalItemsCount
-        // "Near the bottom" = the last visible item is within 2 of the end,
-        // OR the list isn't full yet. The first turn always satisfies this.
-        val nearBottom = last == null || last.index >= total - 2
-        if (nearBottom) {
-            // scrollToItem (instant) is less jarring than animateScrollToItem
-            // when the user has just sent a message and is waiting for a reply.
-            listState.scrollToItem(state.messages.lastIndex)
+    LaunchedEffect(state.messages.size, state.isLoading) {
+        if (state.messages.isNotEmpty()) {
+            scope.launch {
+                listState.animateScrollToItem(state.messages.lastIndex)
+            }
         }
     }
 
@@ -382,21 +369,35 @@ fun ChatScreen(
                             )
                         }
                     } else {
+                        val lastAssistantId = state.messages
+                            .lastOrNull { it.role == "assistant" }?.id
+
                         items(
                             items = state.messages,
                             key = { it.id },
-                            // Per-role recycling — Compose can reuse slot
-                            // measurement and layout between same-role items
-                            // (user / assistant / system) instead of treating
-                            // every bubble as a fresh type.
                             contentType = { it.role }
                         ) { message ->
-                            ChatBubble(message = message)
+                            ChatBubble(
+                                message = message,
+                                isLastAssistant = message.id == lastAssistantId,
+                                onRegenerate = if (message.id == lastAssistantId && !state.isLoading) {
+                                    { viewModel.regenerateLastAnswer() }
+                                } else null
+                            )
                         }
                     }
 
                     if (state.isLoading) {
-                        item(key = "loading_thinking") { ThinkingBubble() }
+                        item(key = "loading_thinking") {
+                            WaitingResponseRow(
+                                executingTools = state.executingTools,
+                                statusText = if (state.executingTools.isNotEmpty()) {
+                                    "Running tools"
+                                } else {
+                                    "Thinking"
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -727,7 +728,11 @@ private fun SuggestionCard(
  * ================================================================ */
 
 @Composable
-private fun ChatBubble(message: ChatUiMessage) {
+private fun ChatBubble(
+    message: ChatUiMessage,
+    isLastAssistant: Boolean = false,
+    onRegenerate: (() -> Unit)? = null
+) {
     val clipboard = LocalClipboardManager.current
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
@@ -798,52 +803,81 @@ private fun ChatBubble(message: ChatUiMessage) {
                 shadowElevation = if (isUser) 1.dp else 0.dp
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                    MessageContent(
-                        content = message.content,
-                        textColor = textColor
-                    )
+                    if (isUser) {
+                        // User messages stay plain text (no markdown)
+                        Text(
+                            text = message.content,
+                            color = textColor,
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp
+                        )
+                    } else {
+                        // Assistant messages render markdown
+                        MarkdownText(
+                            content = message.content,
+                            textColor = textColor
+                        )
+                    }
                 }
             }
 
-            if (message.attachments.isNotEmpty() || !isUser) {
-                Spacer(Modifier.height(4.dp))
+            // Action row below bubble
+            Spacer(Modifier.height(4.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (message.attachments.isNotEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (message.attachments.isNotEmpty()) {
+                    Text(
+                        text = "${message.attachments.size} attachment" +
+                            if (message.attachments.size == 1) "" else "s",
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                if (!isUser) {
+                    // Copy button
+                    Row(
+                        modifier = Modifier.clickable {
+                            clipboard.setText(AnnotatedString(message.content))
+                            Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_lucide_copy),
+                            contentDescription = "Copy",
+                            tint = scheme.onSurfaceVariant,
+                            modifier = Modifier.size(12.dp)
+                        )
                         Text(
-                            text = "${message.attachments.size} attachment" +
-                                if (message.attachments.size == 1) "" else "s",
+                            text = "Copy",
                             color = scheme.onSurfaceVariant,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
 
-                    if (!isUser) {
+                    // Regenerate button (only on the last assistant message)
+                    if (onRegenerate != null) {
                         Row(
-                            modifier = Modifier.clickable {
-                                clipboard.setText(AnnotatedString(message.content))
-                                Toast.makeText(
-                                    context,
-                                    "Copied",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            },
+                            modifier = Modifier.clickable { onRegenerate() },
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_lucide_copy),
-                                contentDescription = "Copy",
-                                tint = scheme.onSurfaceVariant,
+                                painter = painterResource(id = R.drawable.ic_lucide_refresh),
+                                contentDescription = "Regenerate",
+                                tint = scheme.primary,
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                text = "Copy",
-                                color = scheme.onSurfaceVariant,
+                                text = "Regenerate",
+                                color = scheme.primary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -855,48 +889,8 @@ private fun ChatBubble(message: ChatUiMessage) {
     }
 }
 
-@Composable
-private fun MessageContent(content: String, textColor: Color) {
-    val looksLikeCode = content.contains("```") ||
-        content.lines().any {
-            val line = it.trim()
-            line.startsWith("fun ") ||
-                line.startsWith("class ") ||
-                line.startsWith("val ") ||
-                line.startsWith("var ") ||
-                line.startsWith("import ") ||
-                line.startsWith("package ")
-        }
-
-    if (looksLikeCode) {
-        val scheme = MaterialTheme.colorScheme
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = scheme.surface.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(10.dp),
-            border = BorderStroke(1.dp, scheme.outline.copy(alpha = 0.3f))
-        ) {
-            Text(
-                text = content.replace("```", ""),
-                color = textColor,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
-                modifier = Modifier.padding(12.dp)
-            )
-        }
-    } else {
-        Text(
-            text = content,
-            color = textColor,
-            fontSize = 15.sp,
-            lineHeight = 22.sp
-        )
-    }
-}
-
 /* ================================================================
- *  Thinking indicator
+ *  Thinking indicator (kept as fallback, but primary is WaitingResponseRow)
  * ================================================================ */
 
 @Composable
