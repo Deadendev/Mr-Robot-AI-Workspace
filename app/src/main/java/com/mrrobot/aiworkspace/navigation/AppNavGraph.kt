@@ -15,7 +15,6 @@ import com.mrrobot.aiworkspace.ui.screens.SandboxScreen
 import com.mrrobot.aiworkspace.ui.screens.SettingsScreen
 import com.mrrobot.aiworkspace.ui.screens.SkillsScreen
 import com.mrrobot.aiworkspace.ui.screens.SoulHeartbeatScreen
-import com.mrrobot.aiworkspace.ui.screens.WelcomeScreen
 
 /**
  * Routes the app exposes to the navigation host.
@@ -51,8 +50,11 @@ fun AppNavGraph() {
         navController = navController,
         startDestination = Route.Welcome.path
     ) {
+        // The "Welcome" route IS the chat — Kai 9000 styling lives inside
+        // ChatScreen so opening the app drops the user straight into the
+        // chat with the dual-circle hero as its empty state.
         composable(Route.Welcome.path) {
-            WelcomeScreen(navController)
+            ChatScreen(navController = navController)
         }
 
         composable(Route.Chat.path) {
