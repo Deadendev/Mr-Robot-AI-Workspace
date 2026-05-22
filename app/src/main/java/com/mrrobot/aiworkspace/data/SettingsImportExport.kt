@@ -1,6 +1,7 @@
 package com.mrrobot.aiworkspace.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
@@ -114,7 +115,7 @@ object SettingsImportExport {
     private suspend fun applySection(
         obj: JSONObject,
         replace: Boolean,
-        edit: suspend (mutator: (Preferences.MutablePreferences) -> Unit) -> Unit
+        edit: suspend (mutator: (MutablePreferences) -> Unit) -> Unit
     ): Pair<Int, Int> {
         var imported = 0
         var errors = 0
@@ -139,7 +140,7 @@ object SettingsImportExport {
     }
 
     private fun applyTypedEntry(
-        mutable: Preferences.MutablePreferences,
+        mutable: MutablePreferences,
         name: String,
         entry: JSONObject
     ): Boolean {
