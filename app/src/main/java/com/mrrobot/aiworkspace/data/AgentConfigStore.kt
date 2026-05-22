@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 
-private val Context.agentConfigDataStore by preferencesDataStore(name = "mr_robot_agent_config")
+internal val Context.agentConfigDataStore by preferencesDataStore(name = "mr_robot_agent_config")
 
 /** User-editable "soul" — the base system prompt prepended to every chat. */
 data class SoulConfig(
