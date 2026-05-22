@@ -22,7 +22,6 @@ import com.mrrobot.aiworkspace.ui.screens.AgentsScreen
 import com.mrrobot.aiworkspace.ui.screens.ChatScreen
 import com.mrrobot.aiworkspace.ui.screens.MarketplaceScreen
 import com.mrrobot.aiworkspace.ui.screens.MemoriesScreen
-import com.mrrobot.aiworkspace.ui.screens.MoreScreen
 import com.mrrobot.aiworkspace.ui.screens.ProfileScreen
 import com.mrrobot.aiworkspace.ui.screens.SandboxScreen
 import com.mrrobot.aiworkspace.ui.screens.SettingsScreen
@@ -57,12 +56,6 @@ sealed class Route(
         path = "skills",
         label = "Skills",
         iconRes = R.drawable.ic_lucide_wand
-    )
-
-    object More : Route(
-        path = "more",
-        label = "More",
-        iconRes = R.drawable.ic_lucide_menu
     )
 
     object Sandbox : Route(
@@ -111,7 +104,7 @@ fun AppNavGraph() {
         Route.Chat,
         Route.Agents,
         Route.Skills,
-        Route.More
+        Route.Settings
     )
 
     Scaffold(
@@ -184,10 +177,6 @@ fun AppNavGraph() {
                 SkillsScreen()
             }
 
-            composable(Route.More.path) {
-                MoreScreen(navController)
-            }
-
             composable(Route.Sandbox.path) {
                 SandboxScreen()
             }
@@ -221,14 +210,15 @@ private fun isBottomItemSelected(
 ): Boolean {
     if (currentRoute == route.path) return true
 
-    val moreRoutes = setOf(
+    // Settings is the umbrella tab — it should stay highlighted whenever
+    // the user is inside any of the sub-features that live under it.
+    val settingsRoutes = setOf(
         Route.Sandbox.path,
         Route.Market.path,
-        Route.Settings.path,
         Route.Profile.path,
         Route.Memories.path,
         Route.SoulHeartbeat.path
     )
 
-    return route == Route.More && currentRoute in moreRoutes
+    return route == Route.Settings && currentRoute in settingsRoutes
 }
