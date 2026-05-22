@@ -1,11 +1,12 @@
 package com.mrrobot.aiworkspace.ui.screens
 
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,186 +14,87 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mrrobot.aiworkspace.R
-import com.mrrobot.aiworkspace.data.AiModels
-import com.mrrobot.aiworkspace.data.ApiProvider
-import com.mrrobot.aiworkspace.data.AppThemeMode
-import com.mrrobot.aiworkspace.ui.components.CyberButton
-import com.mrrobot.aiworkspace.ui.components.GlassCard
-import com.mrrobot.aiworkspace.ui.components.ScreenShell
-import com.mrrobot.aiworkspace.ui.components.Subtitle
-import com.mrrobot.aiworkspace.ui.components.Title
-import com.mrrobot.aiworkspace.viewmodel.SettingsUiState
-import com.mrrobot.aiworkspace.viewmodel.SettingsViewModel
 
-@Composable
-fun SettingsScreen(
-    viewModel: SettingsViewModel = viewModel()
+private enum class SettingsTab(
+    val label: String,
+    @DrawableRes val iconRes: Int
 ) {
-    val state by viewModel.uiState.collectAsState()
+    AI(label = "AI", iconRes = R.drawable.ic_lucide_settings),
+    Memories(label = "Memories", iconRes = R.drawable.ic_lucide_sparkles),
+    Soul(label = "Soul", iconRes = R.drawable.ic_lucide_cpu),
+    Sandbox(label = "Sandbox", iconRes = R.drawable.ic_lucide_terminal),
+    Store(label = "Store", iconRes = R.drawable.ic_lucide_store),
+    Profile(label = "Profile", iconRes = R.drawable.ic_lucide_user)
+}
 
-    var editorProvider by remember { mutableStateOf(ApiProvider.OpenRouter) }
-    var editorApiKey by remember { mutableStateOf("") }
-    var editorModel by remember {
-        mutableStateOf(AiModels.defaultForProvider(ApiProvider.OpenRouter).id)
-    }
+/**
+ * Top-level Settings screen — Kai 9000 inspired tab layout.
+ *
+ * Replaces the old "More" screen. All workspace features live here as
+ * horizontal pill tabs across the top; tapping a pill swaps in the
+ * matching screen below without leaving the Settings tab.
+ */
+@Composable
+fun SettingsScreen() {
+    var currentTab by remember { mutableStateOf(SettingsTab.AI) }
 
-    LaunchedEffect(state.isLoaded) {
-        if (state.isLoaded) {
-            val firstSaved = state.configuredProviderModels().firstOrNull()
-            editorProvider = firstSaved?.provider ?: ApiProvider.OpenRouter
-            editorApiKey = state.keyFor(editorProvider)
-            editorModel = firstSaved?.modelId ?: AiModels.defaultForProvider(editorProvider).id
-        }
-    }
+    val scheme = MaterialTheme.colorScheme
 
-    ScreenShell {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 20.dp)
-        ) {
-            item {
-                Text(
-                    text = "Settings",
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 34.sp
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        scheme.background,
+                        scheme.surface.copy(alpha = 0.98f),
+                        scheme.surfaceVariant.copy(alpha = 0.72f)
+                    )
                 )
+            )
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            SettingsHeader()
 
-                Spacer(Modifier.height(8.dp))
+            SettingsTabSelector(
+                tabs = SettingsTab.entries,
+                currentTab = currentTab,
+                onSelectTab = { currentTab = it }
+            )
 
-                Subtitle("Configure models, API keys, themes, and workspace preferences.")
-
-                Spacer(Modifier.height(14.dp))
-
-                GlassCard {
-                    ProviderDashboard(
-                        state = state,
-                        onEditProvider = { provider ->
-                            editorProvider = provider
-                            editorApiKey = state.keyFor(provider)
-                            editorModel = state.modelFor(provider)
-                        },
-                        onActivateProvider = viewModel::activateProvider
-                    )
-
-                    Spacer(Modifier.height(18.dp))
-
-                    AddApiKeyCard(
-                        provider = editorProvider,
-                        apiKey = editorApiKey,
-                        model = editorModel,
-                        onProviderChange = { provider ->
-                            editorProvider = provider
-                            editorApiKey = state.keyFor(provider)
-                            editorModel = state.modelFor(provider)
-                        },
-                        onApiKeyChange = { editorApiKey = it },
-                        onModelChange = { editorModel = it },
-                        onSave = {
-                            viewModel.saveProviderConfiguration(
-                                provider = editorProvider,
-                                model = editorModel,
-                                apiKey = editorApiKey,
-                                activate = false
-                            )
-                        },
-                        onSaveAndActivate = {
-                            viewModel.saveProviderConfiguration(
-                                provider = editorProvider,
-                                model = editorModel,
-                                apiKey = editorApiKey,
-                                activate = true
-                            )
-                        }
-                    )
-
-                    Spacer(Modifier.height(18.dp))
-
-                    ThemeSelectorCard(
-                        selected = state.themeMode,
-                        onSelected = viewModel::updateThemeMode
-                    )
-
-                    Spacer(Modifier.height(16.dp))
-
-                    CyberButton("Save Settings") {
-                        viewModel.save()
-                    }
-
-                    if (state.savedMessage.isNotBlank()) {
-                        Spacer(Modifier.height(12.dp))
-                        Subtitle(state.savedMessage)
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    OutlinedButton(
-                        onClick = { viewModel.clear() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                    ) {
-                        Text("Clear Settings")
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                GlassCard {
-                    Title("Model Catalog")
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Subtitle("Choose a provider above to view its supported models.")
-
-                    Spacer(Modifier.height(8.dp))
-
-                    AiModels.byProvider(editorProvider).forEach { model ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    editorModel = model.id
-                                }
-                                .padding(vertical = 10.dp)
-                        ) {
-                            Subtitle("${model.name} — ${model.provider}")
-                            Subtitle(model.id)
-                        }
-
-                        HorizontalDivider()
-                    }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            ) {
+                when (currentTab) {
+                    SettingsTab.AI -> AiSettingsScreen()
+                    SettingsTab.Memories -> MemoriesScreen()
+                    SettingsTab.Soul -> SoulHeartbeatScreen()
+                    SettingsTab.Sandbox -> SandboxScreen()
+                    SettingsTab.Store -> MarketplaceScreen()
+                    SettingsTab.Profile -> ProfileScreen()
                 }
             }
         }
@@ -200,514 +102,79 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun ProviderDashboard(
-    state: SettingsUiState,
-    onEditProvider: (ApiProvider) -> Unit,
-    onActivateProvider: (ApiProvider) -> Unit
+private fun SettingsHeader() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Text(
+            text = "Settings",
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.ExtraBold,
+            lineHeight = 34.sp
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = "Manage providers, memories, soul, sandbox, marketplace, and profile.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp
+        )
+    }
+}
+
+@Composable
+private fun SettingsTabSelector(
+    tabs: Iterable<SettingsTab>,
+    currentTab: SettingsTab,
+    onSelectTab: (SettingsTab) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Title("AI Provider")
-
-        Spacer(Modifier.height(6.dp))
-
-        Subtitle("Configure models and runtime keys.")
-
-        Spacer(Modifier.height(14.dp))
-
-        ActiveProviderCard(state = state)
-
-        Spacer(Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Your Keys",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
-            )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        tabs.forEach { tab ->
+            val isSelected = currentTab == tab
 
             Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                border = BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                ),
-                shape = MaterialTheme.shapes.extraLarge
-            ) {
-                Text(
-                    text = "+ Add Key",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        val saved = state.configuredProviderModels()
-
-        if (saved.isEmpty()) {
-            Subtitle("No API keys saved yet. Add a key below.")
-        } else {
-            saved.forEach { config ->
-                SavedKeyRow(
-                    provider = config.provider,
-                    modelId = config.modelId,
-                    isActive = state.hasActiveConfiguration() &&
-                        config.provider == state.selectedProvider,
-                    onEdit = { onEditProvider(config.provider) },
-                    onActivate = { onActivateProvider(config.provider) }
-                )
-
-                Spacer(Modifier.height(8.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ActiveProviderCard(state: SettingsUiState) {
-    val hasActive = state.hasActiveConfiguration()
-
-    Surface(
-        color = if (hasActive) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-        } else {
-            MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
-        },
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (hasActive) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-            } else {
-                MaterialTheme.colorScheme.error.copy(alpha = 0.25f)
-            }
-        ),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Active",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(Modifier.height(4.dp))
-
-                Text(
-                    text = if (hasActive) {
-                        state.selectedProvider.displayName
-                    } else {
-                        "No active model"
-                    },
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(Modifier.height(2.dp))
-
-                Text(
-                    text = if (hasActive) {
-                        AiModels.findById(state.modelFor(state.selectedProvider)).name
-                    } else {
-                        "Add a key below or activate a saved provider."
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
-
-            Text(
-                text = if (hasActive) "Connected" else "No Key",
-                color = if (hasActive) {
-                    MaterialTheme.colorScheme.primary
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .clickable { onSelectTab(tab) },
+                shape = RoundedCornerShape(50),
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
                 } else {
-                    MaterialTheme.colorScheme.error
-                },
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun SavedKeyRow(
-    provider: ApiProvider,
-    modelId: String,
-    isActive: Boolean,
-    onEdit: () -> Unit,
-    onActivate: () -> Unit
-) {
-    Surface(
-        color = if (isActive) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-        } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
-        },
-        border = BorderStroke(
-            1.dp,
-            if (isActive) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)
-            } else {
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
-            }
-        ),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = provider.displayName,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-
-                Text(
-                    text = "${AiModels.findById(modelId).name} • ${if (isActive) "Active" else "Saved"}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Edit",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    modifier = Modifier
-                        .clickable { onEdit() }
-                        .padding(6.dp)
-                )
-
-                if (!isActive) {
-                    Text(
-                        text = "Activate",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .clickable { onActivate() }
-                            .padding(6.dp)
-                    )
+                    Color.Transparent
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AddApiKeyCard(
-    provider: ApiProvider,
-    apiKey: String,
-    model: String,
-    onProviderChange: (ApiProvider) -> Unit,
-    onApiKeyChange: (String) -> Unit,
-    onModelChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onSaveAndActivate: () -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.74f),
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
-        ),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
-        ) {
-            Text(
-                text = "Add API Key",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            ProviderDropdown(
-                selected = provider,
-                onSelected = onProviderChange
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = onApiKeyChange,
-                label = { Text(provider.keyLabel) },
-                placeholder = { Text(provider.keyPlaceholder) },
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            ModelDropdown(
-                selectedProvider = provider,
-                selectedModel = model,
-                onSelected = onModelChange
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            Subtitle(provider.helpText)
-
-            Spacer(Modifier.height(14.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedButton(
-                    onClick = onSave,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Save")
-                }
+                    Icon(
+                        painter = painterResource(id = tab.iconRes),
+                        contentDescription = tab.label,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
 
-                Button(
-                    onClick = onSaveAndActivate,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                ) {
                     Text(
-                        text = "Save & Activate",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
+                        text = tab.label,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                        fontSize = 13.sp,
                         maxLines = 1
                     )
                 }
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ProviderDropdown(
-    selected: ApiProvider,
-    onSelected: (ApiProvider) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded }
-    ) {
-        OutlinedTextField(
-            value = selected.displayName,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Provider") },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-            },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            ApiProvider.values().forEach { provider ->
-                DropdownMenuItem(
-                    text = { Text(provider.displayName) },
-                    onClick = {
-                        onSelected(provider)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ModelDropdown(
-    selectedProvider: ApiProvider,
-    selectedModel: String,
-    onSelected: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val models = AiModels.byProvider(selectedProvider)
-    val selected = models.firstOrNull { it.id == selectedModel }
-        ?: AiModels.defaultForProvider(selectedProvider)
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded }
-    ) {
-        OutlinedTextField(
-            value = selected.name,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Model") },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-            },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            models.forEach { model ->
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(model.name)
-                            Text(
-                                text = model.id,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp
-                            )
-                        }
-                    },
-                    onClick = {
-                        onSelected(model.id)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThemeSelectorCard(
-    selected: AppThemeMode,
-    onSelected: (AppThemeMode) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Title("Theme")
-
-        Spacer(Modifier.height(6.dp))
-
-        Subtitle("Choose the app appearance and design mode.")
-
-        Spacer(Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ThemeTile("Auto", AppThemeMode.Auto, selected, R.drawable.ic_lucide_sun_moon_exact, onSelected, Modifier.weight(1f))
-            ThemeTile("Light", AppThemeMode.Light, selected, R.drawable.ic_lucide_sun, onSelected, Modifier.weight(1f))
-            ThemeTile("Dark", AppThemeMode.Dark, selected, R.drawable.ic_lucide_moon, onSelected, Modifier.weight(1f))
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ThemeTile("Cyber", AppThemeMode.Cyberpunk, selected, R.drawable.ic_lucide_cpu, onSelected, Modifier.weight(1f))
-            ThemeTile("Hacker", AppThemeMode.Hacker, selected, R.drawable.ic_lucide_terminal_square, onSelected, Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun ThemeTile(
-    title: String,
-    mode: AppThemeMode,
-    selected: AppThemeMode,
-    @DrawableRes iconRes: Int,
-    onSelected: (AppThemeMode) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val isSelected = selected == mode
-
-    Surface(
-        modifier = modifier.clickable { onSelected(mode) },
-        color = if (isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.76f)
-        },
-        border = BorderStroke(
-            1.dp,
-            if (isSelected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-            }
-        ),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = title,
-                tint = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(26.dp)
-            )
-
-            Text(
-                text = title,
-                color = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                maxLines = 1
-            )
         }
     }
 }
