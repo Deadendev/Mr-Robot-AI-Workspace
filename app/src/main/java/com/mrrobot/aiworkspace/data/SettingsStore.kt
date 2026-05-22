@@ -1,18 +1,20 @@
 package com.mrrobot.aiworkspace.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.settingsDataStore by preferencesDataStore(name = "mr_robot_settings")
+internal val Context.settingsDataStore by preferencesDataStore(name = "mr_robot_settings")
 
 enum class AppThemeMode {
     Auto,
     Dark,
     Light,
+    PureBlack,
     Cyberpunk,
     Hacker
 }
@@ -21,6 +23,7 @@ data class AppSettings(
     val apiKey: String = "",
     val model: String = "openai/gpt-4o-mini",
     val themeMode: AppThemeMode = AppThemeMode.Auto,
+    val dynamicUiEnabled: Boolean = true,
     val selectedProvider: ApiProvider = ApiProvider.OpenRouter,
 
     val openRouterApiKey: String = "",
@@ -131,10 +134,11 @@ data class AppSettings(
 
 class SettingsStore(private val context: Context) {
 
-    private object Keys {
+    object Keys {
         val API_KEY = stringPreferencesKey("openrouter_api_key")
         val MODEL = stringPreferencesKey("selected_model")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val DYNAMIC_UI_ENABLED = booleanPreferencesKey("dynamic_ui_enabled")
         val SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
 
         val OPENROUTER_API_KEY = stringPreferencesKey("api_key_openrouter")
@@ -182,6 +186,7 @@ class SettingsStore(private val context: Context) {
             }.getOrDefault(ApiProvider.OpenRouter)
 
             val themeMode = parseThemeMode(prefs[Keys.THEME_MODE])
+            val dynamicUiEnabled = prefs[Keys.DYNAMIC_UI_ENABLED] ?: true
 
             val openRouterModel = normalizeModel(ApiProvider.OpenRouter, prefs[Keys.OPENROUTER_MODEL] ?: prefs[Keys.MODEL])
             val openAiModel = normalizeModel(ApiProvider.OpenAI, prefs[Keys.OPENAI_MODEL])
@@ -223,6 +228,7 @@ class SettingsStore(private val context: Context) {
                 apiKey = openRouterKey,
                 model = activeModel,
                 themeMode = themeMode,
+                dynamicUiEnabled = dynamicUiEnabled,
                 selectedProvider = selectedProvider,
 
                 openRouterApiKey = openRouterKey,
@@ -420,6 +426,18 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun setThemeMode(mode: AppThemeMode) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.THEME_MODE] = mode.name
+        }
+    }
+
+    suspend fun setDynamicUiEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.DYNAMIC_UI_ENABLED] = enabled
+        }
+    }
+
     suspend fun clearSettings() {
         context.settingsDataStore.edit { prefs ->
             prefs.clear()
@@ -429,6 +447,13 @@ class SettingsStore(private val context: Context) {
     private fun parseThemeMode(value: String?): AppThemeMode {
         return when (value) {
             "Cyber" -> AppThemeMode.Cyberpunk
+            // Kai 9000 used "OledBlack" for pure-black OLED; map that name in
+            // case the user imports a Kai settings export.
+            "OledBlack", "System" -> when (value) {
+                "OledBlack" -> AppThemeMode.PureBlack
+                "System" -> AppThemeMode.Auto
+                else -> AppThemeMode.Auto
+            }
             else -> runCatching {
                 AppThemeMode.valueOf(value ?: AppThemeMode.Auto.name)
             }.getOrDefault(AppThemeMode.Auto)

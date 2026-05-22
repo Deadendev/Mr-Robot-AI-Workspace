@@ -40,6 +40,7 @@ private enum class SettingsTab(
     val label: String,
     @DrawableRes val iconRes: Int
 ) {
+    General(label = "General", iconRes = R.drawable.ic_lucide_sun_moon_exact),
     AI(label = "AI", iconRes = R.drawable.ic_lucide_settings),
     Memories(label = "Memories", iconRes = R.drawable.ic_lucide_sparkles),
     Soul(label = "Soul", iconRes = R.drawable.ic_lucide_cpu),
@@ -57,7 +58,7 @@ private enum class SettingsTab(
  */
 @Composable
 fun SettingsScreen() {
-    var currentTab by remember { mutableStateOf(SettingsTab.AI) }
+    var currentTab by remember { mutableStateOf(SettingsTab.General) }
 
     val scheme = MaterialTheme.colorScheme
 
@@ -89,6 +90,7 @@ fun SettingsScreen() {
                     .weight(1f, fill = true)
             ) {
                 when (currentTab) {
+                    SettingsTab.General -> GeneralSettingsScreen()
                     SettingsTab.AI -> AiSettingsScreen()
                     SettingsTab.Memories -> MemoriesScreen()
                     SettingsTab.Soul -> SoulHeartbeatScreen()
