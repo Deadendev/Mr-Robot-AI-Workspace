@@ -21,7 +21,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -81,6 +83,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -322,15 +325,10 @@ fun ChatScreen(
                     .navigationBarsPadding()
             ) {
                 ChatTopBar(
-                    provider = state.provider,
-                    model = state.model,
                     isReady = state.isProviderReady,
-                    activeSessionTitle = state.sessions
-                        .firstOrNull { it.id == state.activeSessionId }
-                        ?.title,
                     onOpenHistory = { scope.launch { drawerState.open() } },
                     onOpenSandbox = { navController?.navigate(Route.Sandbox.path) },
-                    onNewChat = { viewModel.newChat() }
+                    onOpenSettings = { navController?.navigate(Route.Settings.path) }
                 )
 
                 BrainStatusBanner(
@@ -445,92 +443,93 @@ fun ChatScreen(
 }
 
 /* ================================================================
- *  Top bar
+ *  Top bar (Kai 9000 styling — minimal icon row, no model line)
+ *
+ *  Icons, left → right:
+ *    1. History     → opens the chat history drawer
+ *    2. Server      → opens the Sandbox (terminal, files, packages)
+ *    3. Mute        → cosmetic mute toggle (sound/notification chime)
+ *    4. Settings    → opens the unified Settings tab screen
+ *
+ *  "New chat" is reachable from the top of the history drawer to keep
+ *  this bar visually identical to the Kai 9000 mockup (4 icons only).
  * ================================================================ */
 
 @Composable
 private fun ChatTopBar(
-    provider: String,
-    model: String,
     isReady: Boolean,
-    activeSessionTitle: String?,
     onOpenHistory: () -> Unit,
     onOpenSandbox: () -> Unit,
-    onNewChat: () -> Unit
+    onOpenSettings: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    var muted by remember { mutableStateOf(true) }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = scheme.surface,
+        color = Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CircularIconButton(
-                    iconRes = R.drawable.ic_lucide_history,
-                    contentDescription = "Chat history",
-                    onClick = onOpenHistory
-                )
-
-                Spacer(Modifier.width(6.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = activeSessionTitle?.takeIf { it.isNotBlank() } ?: "Mr. Robot",
-                        color = scheme.onSurface,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(Modifier.height(2.dp))
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDot(isReady = isReady)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (isReady) {
-                                "$provider \u00B7 ${shortModel(model)}"
-                            } else {
-                                "No active model"
-                            },
-                            color = scheme.onSurfaceVariant,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                CircularIconButton(
-                    iconRes = R.drawable.ic_lucide_terminal,
-                    contentDescription = "Linux sandbox",
-                    onClick = onOpenSandbox,
-                    tint = scheme.tertiary
-                )
-
-                CircularIconButton(
-                    iconRes = R.drawable.ic_lucide_edit,
-                    contentDescription = "New chat",
-                    onClick = onNewChat,
-                    tint = scheme.primary
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onOpenHistory, modifier = Modifier.size(44.dp)) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_lucide_history),
+                    contentDescription = "Conversation history",
+                    tint = scheme.onBackground,
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            HorizontalDivider(
-                modifier = Modifier.fillMaxWidth(),
-                thickness = 0.5.dp,
-                color = scheme.outline.copy(alpha = 0.25f)
-            )
+            IconButton(onClick = onOpenSandbox, modifier = Modifier.size(44.dp)) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_lucide_server),
+                    contentDescription = "Sandbox: terminal, files, packages",
+                    tint = scheme.onBackground,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            // Discreet "ready" indicator just so the user can tell at a glance
+            // that the model is configured. It sits between the left and
+            // right icon clusters, keeping the bar minimal like the mockup.
+            if (!isReady) {
+                Spacer(Modifier.width(4.dp))
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(scheme.error)
+                )
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            IconButton(onClick = { muted = !muted }, modifier = Modifier.size(44.dp)) {
+                Icon(
+                    painter = painterResource(
+                        id = if (muted) R.drawable.ic_lucide_volume_off
+                        else R.drawable.ic_lucide_sparkles
+                    ),
+                    contentDescription = if (muted) "Sound off" else "Sound on",
+                    tint = scheme.onBackground,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            IconButton(onClick = onOpenSettings, modifier = Modifier.size(44.dp)) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_lucide_settings),
+                    contentDescription = "Settings",
+                    tint = scheme.onBackground,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         }
     }
 }
@@ -622,7 +621,13 @@ private fun AssistantAvatar(
 }
 
 /* ================================================================
- *  Empty state
+/* ================================================================
+ *  Empty state — Mr. Robot welcome hero
+ *
+ *  Centers the app's robot icon and a "Welcome to Mr. Robot"
+ *  greeting, with a gradient pill that nudges the user into the
+ *  interactive flow. Replaces the legacy "How can I help you today"
+ *  layout so the home/chat screen matches the Kai 9000 mockup.
  * ================================================================ */
 
 @Composable
@@ -637,46 +642,75 @@ private fun EmptyChatState(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 24.dp),
+            .padding(top = 60.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        AssistantAvatar(size = 64.dp, ring = true)
+        Image(
+            painter = painterResource(id = R.drawable.mr_robot_icon),
+            contentDescription = "Mr. Robot",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(96.dp)
+        )
 
         Spacer(Modifier.height(20.dp))
 
         Text(
-            text = "How can I help you today?",
+            text = "Welcome to Mr. Robot",
             color = scheme.onBackground,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            text = if (isReady) {
-                "$provider \u00B7 ${shortModel(model)}"
-            } else {
-                "Add an API key in Settings to get started."
-            },
-            color = scheme.onSurfaceVariant,
-            fontSize = 13.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Medium
         )
 
         Spacer(Modifier.height(28.dp))
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            SuggestionPrompts.forEach { prompt ->
-                SuggestionCard(
-                    text = prompt,
-                    onClick = { onPrompt(prompt) }
-                )
+        StartInteractiveUiButton(
+            onClick = {
+                // Mirrors the mockup's "Start Interactive UI" pill —
+                // tapping it seeds a starter prompt so the user lands
+                // straight in the assistant's dynamic-UI flow.
+                onPrompt("Start interactive UI")
             }
+        )
+
+        if (!isReady) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Add an API key in Settings to get started.",
+                color = scheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
+    }
+}
+
+@Composable
+private fun StartInteractiveUiButton(onClick: () -> Unit) {
+    val gradient = Brush.horizontalGradient(
+        listOf(
+            Color(0xFFA78BFA),
+            Color(0xFF7C3AED),
+            Color(0xFFA78BFA)
+        )
+    )
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .border(
+                width = 2.dp,
+                brush = gradient,
+                shape = RoundedCornerShape(50)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 32.dp, vertical = 14.dp)
+    ) {
+        Text(
+            text = "Start Interactive UI",
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
