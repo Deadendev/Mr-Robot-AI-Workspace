@@ -22,6 +22,12 @@ data class GeneralSettingsUiState(
     val isDaemonEnabled: Boolean = false,
     val isDynamicUiEnabled: Boolean = true,
     val themeMode: AppThemeMode = AppThemeMode.Auto,
+    /**
+     * True when the user has at least one provider configured + activated.
+     * Surfaced in the Daemon Mode card so the user understands that without
+     * an AI key the daemon can run, but every heartbeat tick will fail.
+     */
+    val hasActiveAiProvider: Boolean = false,
     val importMessage: String = "",
     val isImportSuccess: Boolean = false,
     val isLoaded: Boolean = false
@@ -56,6 +62,7 @@ class GeneralSettingsViewModel(application: Application) : AndroidViewModel(appl
                     isDaemonEnabled = heartbeat.enabled,
                     isDynamicUiEnabled = settings.dynamicUiEnabled,
                     themeMode = settings.themeMode,
+                    hasActiveAiProvider = settings.hasActiveConfiguration(),
                     importMessage = _uiState.value.importMessage,
                     isImportSuccess = _uiState.value.isImportSuccess,
                     isLoaded = true

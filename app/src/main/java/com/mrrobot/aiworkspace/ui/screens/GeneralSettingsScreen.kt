@@ -1,5 +1,8 @@
 package com.mrrobot.aiworkspace.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -38,6 +41,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mrrobot.aiworkspace.data.AppThemeMode
 import com.mrrobot.aiworkspace.ui.components.GlassCard
@@ -80,6 +84,7 @@ fun GeneralSettingsScreen(
         item {
             DaemonModeCard(
                 checked = state.isDaemonEnabled,
+                hasActiveAiProvider = state.hasActiveAiProvider,
                 onCheckedChange = viewModel::onToggleDaemon
             )
         }
@@ -119,15 +124,90 @@ fun GeneralSettingsScreen(
 @Composable
 private fun DaemonModeCard(
     checked: Boolean,
+    hasActiveAiProvider: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    var permissionDeniedVisible by remember { mutableStateOf(false) }
+
+    // POST_NOTIFICATIONS launcher (required on Android 13+ to show the
+    // ongoing "Heartbeat active" notification — without it the foreground
+    // service silently fails to post and the user sees nothing happen).
+    val notificationPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            onCheckedChange(true)
+        } else {
+            permissionDeniedVisible = true
+        }
+    }
+
     GlassCard {
         ToggleRow(
             title = "Daemon Mode",
             description = "Keep Mr. Robot running in the background so scheduled tasks " +
                 "execute even when the app is not in the foreground.",
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = { wantsOn ->
+                permissionDeniedVisible = false
+                if (!wantsOn) {
+                    onCheckedChange(false)
+                    return@ToggleRow
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val granted = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (granted) {
+                        onCheckedChange(true)
+                    } else {
+                        notificationPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                } else {
+                    onCheckedChange(true)
+                }
+            }
+        )
+
+        // Status hint — helps the user understand what the toggle just did.
+        if (checked) {
+            Spacer(Modifier.height(10.dp))
+            DaemonStatusHint(
+                hasActiveAiProvider = hasActiveAiProvider
+            )
+        }
+
+        if (permissionDeniedVisible) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Notifications permission was denied. Daemon Mode needs it to post " +
+                    "the persistent heartbeat notification that keeps the service alive. " +
+                    "Enable it in system settings, then toggle Daemon Mode again.",
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun DaemonStatusHint(
+    hasActiveAiProvider: Boolean
+) {
+    if (hasActiveAiProvider) {
+        Text(
+            text = "Daemon active — heartbeat self-checks will run on schedule.",
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 12.sp
+        )
+    } else {
+        Text(
+            text = "Daemon active, but no AI provider is configured. Add a key under the " +
+                "AI tab so heartbeat ticks have a model to call.",
+            color = MaterialTheme.colorScheme.error,
+            fontSize = 12.sp
         )
     }
 }
@@ -145,6 +225,15 @@ private fun DynamicUiCard(
             checked = checked,
             onCheckedChange = onCheckedChange
         )
+
+        if (checked) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Active — assistant replies may include tappable suggestion chips.",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.sp
+            )
+        }
     }
 }
 

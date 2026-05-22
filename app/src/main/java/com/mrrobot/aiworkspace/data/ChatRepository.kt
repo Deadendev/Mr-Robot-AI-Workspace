@@ -23,7 +23,12 @@ data class ChatReply(
     val savedMemoryKeys: List<String> = emptyList(),
     val forgottenMemoryKeys: List<String> = emptyList(),
     val searchedQueries: List<String> = emptyList(),
-    val sandboxOps: List<String> = emptyList()
+    val sandboxOps: List<String> = emptyList(),
+    /**
+     * Suggestion chips parsed from `[CHIP "..."]` directives the AI emitted.
+     * Empty unless the user has Dynamic UI enabled in General settings.
+     */
+    val suggestionChips: List<String> = emptyList()
 ) {
     val didMutateMemory: Boolean
         get() = savedMemoryKeys.isNotEmpty() || forgottenMemoryKeys.isNotEmpty()
@@ -68,7 +73,7 @@ class ChatRepository(
         settings: AppSettings,
         messages: List<ChatMessage>
     ): Result<ChatReply> {
-        val systemPrompt = buildSystemPrompt()
+        val systemPrompt = buildSystemPrompt(dynamicUiEnabled = settings.dynamicUiEnabled)
         return runCatching {
             val workingMessages = messages.toMutableList()
             val performedSearches = mutableListOf<String>()
@@ -143,22 +148,31 @@ class ChatRepository(
             // Strip any leftover directives from the final reply
             val cleanedOfTools = stripAllDirectives(raw)
 
+            // Parse Dynamic-UI suggestion chips off the tail of the reply.
+            // When the user has Dynamic UI off, the model wasn't told about
+            // the syntax — but in case it emits one anyway we still strip it.
+            val withChips = DynamicUiDirectiveParser.parse(cleanedOfTools)
+            val cleanedAfterChips = withChips.cleaned
+            val chips = if (settings.dynamicUiEnabled) withChips.chips else emptyList()
+
             // Apply memory directives
             val parser = directiveParser
             if (parser != null) {
-                val parsed = parser.applyDirectives(cleanedOfTools)
+                val parsed = parser.applyDirectives(cleanedAfterChips)
                 ChatReply(
                     text = parsed.cleaned,
                     savedMemoryKeys = parsed.saved,
                     forgottenMemoryKeys = parsed.forgotten,
                     searchedQueries = performedSearches,
-                    sandboxOps = sandboxOps
+                    sandboxOps = sandboxOps,
+                    suggestionChips = chips
                 )
             } else {
                 ChatReply(
-                    text = cleanedOfTools,
+                    text = cleanedAfterChips,
                     searchedQueries = performedSearches,
-                    sandboxOps = sandboxOps
+                    sandboxOps = sandboxOps,
+                    suggestionChips = chips
                 )
             }
         }
@@ -186,8 +200,12 @@ class ChatRepository(
     /**
      * Build the composed system prompt. Returns null if no stores are wired
      * (caller falls back to ProviderChatClient's built-in default).
+     *
+     * @param dynamicUiEnabled when true, includes the `[CHIP "..."]` directive
+     *   instructions so the model can render suggestion chips inline. Off by
+     *   default for callers that don't (yet) read the General-tab toggle.
      */
-    suspend fun buildSystemPrompt(): String? {
+    suspend fun buildSystemPrompt(dynamicUiEnabled: Boolean = false): String? {
         val soul = agentConfigStore?.getSoul() ?: return null
         val memories = memoryStore?.getAll().orEmpty()
         val activeAgent = agentStore?.getActiveAgent()
@@ -198,7 +216,8 @@ class ChatRepository(
             memories = memories,
             activeAgent = activeAgent,
             activeSkills = activeSkills,
-            sandboxAvailable = sandboxAvailable
+            sandboxAvailable = sandboxAvailable,
+            dynamicUiEnabled = dynamicUiEnabled
         )
     }
 

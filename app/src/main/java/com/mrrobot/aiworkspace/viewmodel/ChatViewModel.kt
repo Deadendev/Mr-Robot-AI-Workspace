@@ -103,7 +103,14 @@ data class ChatUiMessage(
     val id: Long = System.nanoTime(),
     val role: String,
     val content: String,
-    val attachments: List<ChatAttachment> = emptyList()
+    val attachments: List<ChatAttachment> = emptyList(),
+    /**
+     * Dynamic-UI suggestion chips parsed from the assistant's reply. Only
+     * populated when the user has Dynamic UI enabled in General settings.
+     * Tapping a chip drops its label into the chat input via
+     * [ChatViewModel.useSuggestion].
+     */
+    val suggestionChips: List<String> = emptyList()
 )
 
 data class ChatUiState(
@@ -721,7 +728,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         add(
                             ChatUiMessage(
                                 role = "assistant",
-                                content = reply.text
+                                content = reply.text,
+                                suggestionChips = reply.suggestionChips
                             )
                         )
                         // Surface the auto-save / search inline so the user
