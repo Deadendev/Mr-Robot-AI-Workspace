@@ -104,6 +104,13 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         if (cmd.isBlank() || _uiState.value.isRunningCommand) return
         _uiState.value = _uiState.value.copy(commandInput = "", isRunningCommand = true)
 
+        // Handle 'clear' locally — the ANSI escape sequences don't work in our transcript view
+        if (cmd == "clear" || cmd == "cls") {
+            clearTerminal()
+            _uiState.value = _uiState.value.copy(isRunningCommand = false)
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             val sh = getOrCreateShell()
             sh.run(command = cmd, timeoutSeconds = 60)
