@@ -123,6 +123,19 @@ class AgentConfigStore(private val context: Context) {
         }
     }
 
+    /**
+     * Daemon Mode toggle (Kai 9000 parity). Flips just the `enabled` flag and
+     * leaves interval/active-hours/prompt alone so users don't lose their
+     * existing schedule when they toggle the daemon off and on. Pair with
+     * [HeartbeatService.applyConfigFromBackground] to actually start/stop the
+     * foreground service.
+     */
+    suspend fun setHeartbeatEnabled(enabled: Boolean) {
+        context.agentConfigDataStore.edit { prefs ->
+            prefs[Keys.HEARTBEAT_ENABLED] = enabled
+        }
+    }
+
     suspend fun markHeartbeatRun(timestampMs: Long = System.currentTimeMillis()) {
         context.agentConfigDataStore.edit { prefs ->
             prefs[Keys.HEARTBEAT_LAST_RUN_MS] = timestampMs

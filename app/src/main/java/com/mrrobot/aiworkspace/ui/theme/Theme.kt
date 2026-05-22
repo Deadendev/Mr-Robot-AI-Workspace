@@ -64,6 +64,22 @@ private val CyberScheme = lightColorScheme(
     outline = Color(0xFFCBD5E1)
 )
 
+private val PureBlackScheme = darkColorScheme(
+    primary = Color(0xFFE5C7B0),
+    secondary = Color(0xFFB0A399),
+    tertiary = Color(0xFF7DD3C7),
+    background = Color(0xFF000000),
+    surface = Color(0xFF000000),
+    surfaceVariant = Color(0xFF111111),
+    onPrimary = Color(0xFF000000),
+    onSecondary = Color(0xFF000000),
+    onTertiary = Color(0xFF000000),
+    onBackground = Color(0xFFEDEDED),
+    onSurface = Color(0xFFEDEDED),
+    onSurfaceVariant = Color(0xFFB5B5B5),
+    outline = Color(0xFF2C2C2C)
+)
+
 private val HackerScheme = darkColorScheme(
     primary = Color(0xFFFFB3B6),
     secondary = Color(0xFFFFB4AC),
@@ -155,6 +171,7 @@ fun MrRobotTheme(
         AppThemeMode.Auto -> if (systemDark) WarmDarkScheme else WarmLightScheme
         AppThemeMode.Dark -> WarmDarkScheme
         AppThemeMode.Light -> WarmLightScheme
+        AppThemeMode.PureBlack -> PureBlackScheme
         AppThemeMode.Cyberpunk -> CyberScheme
         AppThemeMode.Hacker -> HackerScheme
     }

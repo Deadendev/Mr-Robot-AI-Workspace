@@ -36,6 +36,7 @@ fun SplashScreen(
         AppThemeMode.Auto -> systemDark
         AppThemeMode.Dark -> true
         AppThemeMode.Light -> false
+        AppThemeMode.PureBlack -> true
         AppThemeMode.Cyberpunk -> false
         AppThemeMode.Hacker -> true
     }

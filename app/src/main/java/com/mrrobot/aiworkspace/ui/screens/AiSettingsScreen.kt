@@ -1,6 +1,5 @@
 package com.mrrobot.aiworkspace.ui.screens
 
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,16 +35,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mrrobot.aiworkspace.R
 import com.mrrobot.aiworkspace.data.AiModels
 import com.mrrobot.aiworkspace.data.ApiProvider
-import com.mrrobot.aiworkspace.data.AppThemeMode
 import com.mrrobot.aiworkspace.ui.components.CyberButton
 import com.mrrobot.aiworkspace.ui.components.GlassCard
 import com.mrrobot.aiworkspace.ui.components.ScreenShell
@@ -138,13 +134,6 @@ fun AiSettingsScreen(
                     )
 
                     Spacer(Modifier.height(18.dp))
-
-                    ThemeSelectorCard(
-                        selected = state.themeMode,
-                        onSelected = viewModel::updateThemeMode
-                    )
-
-                    Spacer(Modifier.height(16.dp))
 
                     CyberButton("Save Settings") {
                         viewModel.save()
@@ -616,98 +605,3 @@ private fun ModelDropdown(
     }
 }
 
-@Composable
-private fun ThemeSelectorCard(
-    selected: AppThemeMode,
-    onSelected: (AppThemeMode) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Title("Theme")
-
-        Spacer(Modifier.height(6.dp))
-
-        Subtitle("Choose the app appearance and design mode.")
-
-        Spacer(Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ThemeTile("Auto", AppThemeMode.Auto, selected, R.drawable.ic_lucide_sun_moon_exact, onSelected, Modifier.weight(1f))
-            ThemeTile("Light", AppThemeMode.Light, selected, R.drawable.ic_lucide_sun, onSelected, Modifier.weight(1f))
-            ThemeTile("Dark", AppThemeMode.Dark, selected, R.drawable.ic_lucide_moon, onSelected, Modifier.weight(1f))
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ThemeTile("Cyber", AppThemeMode.Cyberpunk, selected, R.drawable.ic_lucide_cpu, onSelected, Modifier.weight(1f))
-            ThemeTile("Hacker", AppThemeMode.Hacker, selected, R.drawable.ic_lucide_terminal_square, onSelected, Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun ThemeTile(
-    title: String,
-    mode: AppThemeMode,
-    selected: AppThemeMode,
-    @DrawableRes iconRes: Int,
-    onSelected: (AppThemeMode) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val isSelected = selected == mode
-
-    Surface(
-        modifier = modifier.clickable { onSelected(mode) },
-        color = if (isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.76f)
-        },
-        border = BorderStroke(
-            1.dp,
-            if (isSelected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-            }
-        ),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = title,
-                tint = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(26.dp)
-            )
-
-            Text(
-                text = title,
-                color = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                maxLines = 1
-            )
-        }
-    }
-}
