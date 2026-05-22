@@ -26,6 +26,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -382,7 +384,8 @@ fun ChatScreen(
                                 isLastAssistant = message.id == lastAssistantId,
                                 onRegenerate = if (message.id == lastAssistantId && !state.isLoading) {
                                     { viewModel.regenerateLastAnswer() }
-                                } else null
+                                } else null,
+                                onChipTap = { viewModel.useSuggestion(it) }
                             )
                         }
                     }
@@ -727,11 +730,13 @@ private fun SuggestionCard(
  *  Chat bubble
  * ================================================================ */
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChatBubble(
     message: ChatUiMessage,
     isLastAssistant: Boolean = false,
-    onRegenerate: (() -> Unit)? = null
+    onRegenerate: (() -> Unit)? = null,
+    onChipTap: ((String) -> Unit)? = null
 ) {
     val clipboard = LocalClipboardManager.current
     val scheme = MaterialTheme.colorScheme
@@ -817,6 +822,44 @@ private fun ChatBubble(
                             content = message.content,
                             textColor = textColor
                         )
+                    }
+                }
+            }
+
+            // Dynamic UI suggestion chips (Kai 9000-style). Only present on
+            // assistant replies when the user has Dynamic UI enabled in
+            // General settings AND the model emitted `[CHIP "..."]` directives.
+            // Tapping a chip drops its label into the chat input.
+            if (!isUser && message.suggestionChips.isNotEmpty() && onChipTap != null) {
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    message.suggestionChips.forEach { chip ->
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = scheme.primary.copy(alpha = 0.10f),
+                            border = BorderStroke(
+                                1.dp,
+                                scheme.primary.copy(alpha = 0.45f)
+                            ),
+                            modifier = Modifier.clickable { onChipTap(chip) }
+                        ) {
+                            Text(
+                                text = chip,
+                                color = scheme.primary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(
+                                    horizontal = 12.dp,
+                                    vertical = 6.dp
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }

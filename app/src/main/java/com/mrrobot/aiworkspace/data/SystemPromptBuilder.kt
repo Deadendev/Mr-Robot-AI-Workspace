@@ -47,7 +47,8 @@ object SystemPromptBuilder {
         memories: List<MemoryEntry>,
         activeAgent: Agent? = null,
         activeSkills: List<Skill> = emptyList(),
-        sandboxAvailable: Boolean = false
+        sandboxAvailable: Boolean = false,
+        dynamicUiEnabled: Boolean = false
     ): String = buildString {
         if (activeAgent != null) {
             append("You are ${activeAgent.name}.\n")
@@ -87,6 +88,14 @@ object SystemPromptBuilder {
         // the user hasn't installed it yet.
         if (sandboxAvailable) {
             append(SANDBOX_TOOL_INSTRUCTIONS)
+        }
+
+        // Dynamic UI — when the user has the General-tab toggle ON, allow
+        // the model to emit `[CHIP "..."]` directives that render as
+        // tappable suggestion chips below its reply. When OFF, omit the
+        // section entirely so the model produces plain markdown only.
+        if (dynamicUiEnabled) {
+            append(DYNAMIC_UI_INSTRUCTIONS)
         }
 
         val byCategory = memories.groupBy { it.category }
@@ -319,6 +328,41 @@ paths unless the user explicitly asks.
     your final natural-language answer.
   - Do NOT fabricate output. If you didn't run a command, don't pretend.
   - Directives are silent — never describe them to the user as code.
+
+""".trimIndent()
+
+    private val DYNAMIC_UI_INSTRUCTIONS = """
+
+
+## Dynamic UI
+
+The user has Dynamic UI enabled for this conversation. When it would help
+them, you may emit suggestion **chips** at the very end of your reply,
+each on its own line:
+
+[CHIP "Short, action-oriented label"]
+
+The app renders each chip as a tappable button under your bubble. Tapping
+a chip drops its label into the chat input so the user can review and
+send. Use this to:
+  - Offer 2–4 logical follow-up questions after a multi-step explanation.
+  - Suggest the next plausible action ("Run the test", "Show the diff",
+    "Open Settings").
+  - Replace yes/no questions ("Want me to write a test for this?" →
+    chips: `[CHIP "Yes, write a test"] [CHIP "No, leave it"]`).
+
+Rules:
+  - Maximum 4 chips per reply.
+  - Labels must be short (2–7 words), specific, and immediately actionable.
+  - Emit chips on their own lines AFTER your normal markdown answer.
+  - Don't describe the chips in the reply body — they speak for themselves.
+  - Don't wrap chips in code fences. Plain `[CHIP "..."]` only.
+  - When the user's request is fully answered and no follow-up makes sense,
+    skip chips entirely. They are optional, not mandatory.
+
+You may also use rich markdown freely (headings, lists, tables, fenced
+code) — the renderer supports it. Combine clean markdown with chips for
+a polished, interactive feel.
 
 """.trimIndent()
 }
