@@ -42,6 +42,8 @@ private enum class SettingsTab(
 ) {
     General(label = "General", iconRes = R.drawable.ic_lucide_sun_moon_exact),
     AI(label = "AI", iconRes = R.drawable.ic_lucide_settings),
+    Agents(label = "Agents", iconRes = R.drawable.ic_lucide_bot),
+    Skills(label = "Skills", iconRes = R.drawable.ic_lucide_wand),
     Memories(label = "Memories", iconRes = R.drawable.ic_lucide_sparkles),
     Soul(label = "Soul", iconRes = R.drawable.ic_lucide_cpu),
     Sandbox(label = "Sandbox", iconRes = R.drawable.ic_lucide_terminal),
@@ -92,6 +94,8 @@ fun SettingsScreen() {
                 when (currentTab) {
                     SettingsTab.General -> GeneralSettingsScreen()
                     SettingsTab.AI -> AiSettingsScreen()
+                    SettingsTab.Agents -> AgentsScreen()
+                    SettingsTab.Skills -> SkillsScreen()
                     SettingsTab.Memories -> MemoriesScreen()
                     SettingsTab.Soul -> SoulHeartbeatScreen()
                     SettingsTab.Sandbox -> SandboxScreen()
@@ -121,7 +125,7 @@ private fun SettingsHeader() {
         Spacer(Modifier.height(4.dp))
 
         Text(
-            text = "Manage providers, memories, soul, sandbox, marketplace, and profile.",
+            text = "Manage AI providers, agents, skills, memories, soul, sandbox, marketplace, and profile.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 13.sp
         )
